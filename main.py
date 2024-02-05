@@ -40,19 +40,17 @@ def process_image(original_frame):
 
     #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
     #clipped_frame = original_frame.copy()
+    show_image(original_frame)
     
-    
-    roi_coordinates_focused = (220, 290, 100, 300)
-    # roi_coordinates_left = (300, 220, 300, 900)
-    # roi_coordinates_right = (0, 480, 1000, 1600)
-    
+    #roi_coordinates_focused = (220, 290, 100, 300)
+    roi_coordinates_focused = (600,1080,250,1500)
     #focus on region of interest
     roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
     clipped_frame = roi.copy()
-    #cv2.imshow('Lane Detection',clipped_frame)
+    cv2.imshow('Lane Detection',clipped_frame)
     temp_clipped_frame = clipped_frame.copy()
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    #cv2.imshow('Lane Detection',temp_clipped_frame)
+    cv2.imshow('Lane Detection',temp_clipped_frame)
     temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
 
     # width,height  = original_frame.shape[:2]
@@ -78,15 +76,16 @@ def process_image(original_frame):
    
     vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
 
+    """does it ignore all the other lanes?"""
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 0)
-    #show_image(edges)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
-    #cv2.imshow('Lane Detection',masked_corner_edges)
-    #show_image(masked_corner_edges)
+    cv2.imshow('Lane Detection',masked_corner_edges)
     # Apply the mask to the edges
     
-    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=15 ,min_theta = -math.pi, max_theta = math.pi)
+ 
+
+    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=8 ,min_theta = -math.pi, max_theta = math.pi)
     
 
     # focused_frame_right = cv2.bilateralFilter(focused_frame_right , d, sigma_r, sigma_s)    
@@ -103,11 +102,32 @@ def process_image(original_frame):
 
     #vertical_lines = [line for line in lines if np.abs(line[0][1] - np.pi/2) < np.pi/6 and np.abs(line[0][1]) > np.pi/6]
 
+    lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
 
+
+    old_theta = []
+    old_rho = []
+    epsilon_theta = np.pi / 20
+    epsilon_rho = 20
+    filtered_lines = []
     # Draw the two longest lines on the image
     for line in lines:
         rho, theta = line[0]
-        print(theta)
+        #check if two lines have almost the same angle
+        if any(abs(theta - x) <= epsilon_theta for x in old_theta):
+            continue
+        #check if two lines have almost the same distance from 0,0
+        if any(abs(rho - x) <= epsilon_rho for x in old_rho):
+            continue
+        old_rho.append(rho)
+        old_theta.append(theta)
+        filtered_lines.append(line)
+
+    lines = filtered_lines
+    for line in lines:
+        rho, theta = line[0]
+        
+        
         a = np.cos(theta)
         b = np.sin(theta)
         x0 = a * rho
@@ -130,7 +150,7 @@ def process_image(original_frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving2.mp4')
+    cap = cv2.VideoCapture('Driving.mp4')
     # cap2 = cv2.VideoCapture('Driving.mp4')
     plt.figure(figsize=(20, 20))
 
