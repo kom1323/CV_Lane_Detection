@@ -6,25 +6,19 @@ import math
 def filter_white_and_yellow(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
     # Define the lower and upper bounds for white color in HSV
     lower_white = np.array([0, 0, 200], dtype=np.uint8)
     upper_white = np.array([255, 30, 255], dtype=np.uint8)
-
     # Define the lower and upper bounds for yellow color in HSV
     lower_yellow = np.array([20, 100, 100], dtype=np.uint8)
     upper_yellow = np.array([40, 255, 255], dtype=np.uint8)
-
     # Create masks for white and yellow regions
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
     yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
-
     # Combine the masks to get the final mask
     final_mask = cv2.bitwise_or(white_mask, yellow_mask)
-
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
-
     return result
 
 def show_image(img):
@@ -34,103 +28,74 @@ def show_image(img):
     plt.colorbar()
     plt.show()
 
+def display_lines(image, lines):
+ lines_image = np.zeros_like(image)
+ if lines is not None:
+   for line in lines:
+     x1, y1, x2, y2 = line
+     cv2.line(lines_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+ return lines_image
 
 def process_image(original_frame):
-    
+    copy = np.copy(original_frame)
+    filtered_colors = filter_white_and_yellow(original_frame)
+    gray_image= cv2.cvtColor(filtered_colors,cv2.COLOR_BGR2GRAY)
+    blurred_image = cv2.GaussianBlur(gray_image,(5,5),0)
+    edges = cv2.Canny(blurred_image,50,150)
+    region1_image=region(edges)
+    lines = cv2.HoughLinesP(region1_image, rho=1, theta=np.pi/180, threshold=5, minLineLength=15, maxLineGap=3)
+    print(lines)
+    averaged_lines=average(original_frame,lines)
+    print(averaged_lines)
+    black_lines = display_lines(copy, averaged_lines)
+    lanes = cv2.addWeighted(copy, 1, black_lines, 1, 1)
+    return lanes;
 
-    #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
-    #clipped_frame = original_frame.copy()
-    
-    
-    roi_coordinates_focused = (220, 290, 100, 300)
-    # roi_coordinates_left = (300, 220, 300, 900)
-    # roi_coordinates_right = (0, 480, 1000, 1600)
-    
-    #focus on region of interest
-    roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
-    clipped_frame = roi.copy()
-    #cv2.imshow('Lane Detection',clipped_frame)
-    temp_clipped_frame = clipped_frame.copy()
-    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    #cv2.imshow('Lane Detection',temp_clipped_frame)
-    temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-
-    # width,height  = original_frame.shape[:2]
-    # M = np.float32([[1, 0, 0], [0, 1, -height]])
-    # orthographic_image = cv2.warpAffine(temp_clipped_frame, M, (width, height))
-    # show_image(orthographic_image)
-    # focused_frame_left = focused_frame[roi_coordinates_left[0]: roi_coordinates_left[1], roi_coordinates_left[2]:roi_coordinates_left[3]]
-    # focused_frame_right = focused_frame[roi_coordinates_right[0]: roi_coordinates_right[1], roi_coordinates_right[2]:roi_coordinates_right[3]]
-
-    
-    # focused_frame_left = cv2.cvtColor(focused_frame_left, cv2.COLOR_BGR2GRAY)
-    # focused_frame_right = cv2.cvtColor(focused_frame_right, cv2.COLOR_BGR2GRAY)
-
-
-    d = 5  # edge size of neighborhood perimeter
-    sigma_r = 150  # sigma range
-    sigma_s = 100  # sigma spatial
-    edges = cv2.Canny(temp_clipped_frame, 10, 150)
-    
-    mask_corners = np.ones_like(edges) #mask for corners
-    mask_corners[:,:]=255
-    height, width = mask_corners.shape[:2]
-   
-    vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
-
-    # Fill the triangles in the mask
-    cv2.fillPoly(mask_corners, vertices, 0)
-    #show_image(edges)
-    masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
-    #cv2.imshow('Lane Detection',masked_corner_edges)
-    #show_image(masked_corner_edges)
-    # Apply the mask to the edges
-    
-    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=15 ,min_theta = -math.pi, max_theta = math.pi)
-    
-
-    # focused_frame_right = cv2.bilateralFilter(focused_frame_right , d, sigma_r, sigma_s)    
-    # edges_right = cv2.Canny(focused_frame_right , 100, 150, apertureSize=3)
-    
-    # lines_right = cv2.HoughLines(edges_right, 1, np.pi / 180, threshold=200)
-
-
-    # lines = np.concatenate((lines_left, lines_right), axis=0)
-
-    if lines is None:
-        return original_frame
-    
-
-    #vertical_lines = [line for line in lines if np.abs(line[0][1] - np.pi/2) < np.pi/6 and np.abs(line[0][1]) > np.pi/6]
-
-
-    # Draw the two longest lines on the image
+def average(image, lines):
+    left = []
+    right = []
+    avg_lines=[]
     for line in lines:
-        rho, theta = line[0]
-        print(theta)
-        a = np.cos(theta)
-        b = np.sin(theta)
-        x0 = a * rho
-        y0 = b * rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
+        x1, y1, x2, y2 = line.reshape(4)
+        parameters = np.polyfit((x1, x2), (y1, y2), 1)
+        slope = parameters[0]
+        y_int = parameters[1]
+        if slope < 0:
+            left.append((slope, y_int))
+        else:
+            right.append((slope, y_int))
+    if len(right)>0:
+        right_avg = np.average(right, axis=0)
+        avg_lines.append(make_points(image, right_avg))
+    if len(left)>0:
+        left_avg = np.average(left, axis=0)
+        avg_lines.append(make_points(image, left_avg))
 
-        cv2.line(clipped_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+    return np.array(avg_lines)
 
-    alpha = 0.1  # Adjust the alpha value for blending
-    beta = 1.0 - alpha
-    result = cv2.addWeighted(roi, alpha, clipped_frame, beta, 0.0)
+def make_points(image, average): 
+    slope, y_int = average 
+    y1 = image.shape[0]
+    y2 = int(np.maximum(0,y1 * (3/5)))
+    x1 = int(np.maximum(0,int((y1 - y_int) // slope)))
+    x2 = int(np.maximum(0,np.minimum(image.shape[1],(y2 - y_int) // slope)))
+    return np.array([x1, y1, x2, y2])
 
-    # Replace the ROI in the larger image with the blended result
-    original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = result
-    return original_frame
-
-
+def region(image):
+    height, width = image.shape
+    print()
+    triangle = np.array([
+                       [(int(width*0.2), height), (int(width*0.5), int(height*0.2)), (int(width*0.8), height)]
+                       ])
+    
+    mask = np.zeros_like(image)
+    
+    mask = cv2.fillPoly(mask, triangle, 255)
+    mask = cv2.bitwise_and(image, mask)
+    return mask
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving2.mp4')
+    cap = cv2.VideoCapture('Driving3.mp4')
     # cap2 = cv2.VideoCapture('Driving.mp4')
     plt.figure(figsize=(20, 20))
 
