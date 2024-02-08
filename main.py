@@ -3,6 +3,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import math
+
+
+prev_lines = None
+
+
 def filter_white_and_yellow(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -37,8 +42,10 @@ def show_image(img):
 
 
 def filter_lines(lines):
+    global prev_lines
+   
+   
     lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
-
 
     old_theta = []
     old_rho = []
@@ -46,6 +53,7 @@ def filter_lines(lines):
     epsilon_rho = 20
     count_left, avg_rho_left, avg_theta_left = (0,0,0)
     count_right, avg_rho_right, avg_theta_right = (0,0,0)
+    filtered_lines = []
 
 
     # Draw the two longest lines on the image
@@ -80,9 +88,27 @@ def filter_lines(lines):
         avg_rho_right /= count_right
         avg_theta_right /= count_right
 
+
+
+    left_line = np.array([[avg_rho_left, avg_theta_left]])
+    right_line = np.array([[avg_rho_right, avg_theta_right]])
+
+
+    if prev_lines is not None: 
+        if count_left == 0:
+            left_line = prev_lines[0]
+        if count_right == 0:
+            right_line = prev_lines[1]
+
+    if prev_lines is None and count_left > 0 and count_right > 0:
+        filtered_lines = np.array([left_line,right_line])
+        prev_lines = filtered_lines
+    elif prev_lines is not None:
+        print(right_line[0][1])
+        print(count_right)
+        filtered_lines = np.array([left_line,right_line])
+        prev_lines = filtered_lines
     
- 
-    filtered_lines = np.array([[[avg_rho_left, avg_theta_left]],[[avg_rho_right, avg_theta_right]]])
 
     return filtered_lines
 
@@ -91,7 +117,6 @@ def region(image):
 
     """MAYBE USE"""
     height, width = image.shape
-    print()
     triangle = np.array([
                        [(int(width*0.2), height), (int(width*0.5), int(height*0.2)), (int(width*0.8), height)]
                        ])
@@ -109,8 +134,9 @@ def process_image(original_frame):
     #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
     #clipped_frame = original_frame.copy()
     
-    #roi_coordinates_focused = (220, 290, 100, 300)
+    #roi2_coordinates_focused = (220, 290, 100, 300)
     roi_coordinates_focused = (600,1080,250,1500)
+    #roi_coordinates_focused = (150,500,200,350)
     #focus on region of interest
     roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
     clipped_frame = roi.copy()
@@ -122,24 +148,32 @@ def process_image(original_frame):
 
 
 
+   
 
     """USE DILATE AND ERODE"""
     d = 5  # edge size of neighborhood perimeter
     sigma_r = 150  # sigma range
     sigma_s = 100  # sigma spatial
     edges = cv2.Canny(temp_clipped_frame, 10, 150)
+
+
+
+    
     
     mask_corners = np.ones_like(edges) #mask for corners
     mask_corners[:,:]=255
     height, width = mask_corners.shape[:2]
    
+
+
     vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 0)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
     # Apply the mask to the edges
- 
+
+
 
     lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=30 ,min_theta = -math.pi, max_theta = math.pi)
     
@@ -152,8 +186,9 @@ def process_image(original_frame):
     
 
     lines = filter_lines(lines)
-    print(lines.shape)
+  
     for line in lines:
+        
         rho, theta = line[0]
         
         
