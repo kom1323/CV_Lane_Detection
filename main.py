@@ -35,73 +35,8 @@ def show_image(img):
     plt.show()
 
 
-def process_image(original_frame):
-    
 
-    #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
-    #clipped_frame = original_frame.copy()
-    show_image(original_frame)
-    
-    #roi_coordinates_focused = (220, 290, 100, 300)
-    roi_coordinates_focused = (600,1080,250,1500)
-    #focus on region of interest
-    roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
-    clipped_frame = roi.copy()
-    cv2.imshow('Lane Detection',clipped_frame)
-    temp_clipped_frame = clipped_frame.copy()
-    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    cv2.imshow('Lane Detection',temp_clipped_frame)
-    temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-
-    # width,height  = original_frame.shape[:2]
-    # M = np.float32([[1, 0, 0], [0, 1, -height]])
-    # orthographic_image = cv2.warpAffine(temp_clipped_frame, M, (width, height))
-    # show_image(orthographic_image)
-    # focused_frame_left = focused_frame[roi_coordinates_left[0]: roi_coordinates_left[1], roi_coordinates_left[2]:roi_coordinates_left[3]]
-    # focused_frame_right = focused_frame[roi_coordinates_right[0]: roi_coordinates_right[1], roi_coordinates_right[2]:roi_coordinates_right[3]]
-
-    
-    # focused_frame_left = cv2.cvtColor(focused_frame_left, cv2.COLOR_BGR2GRAY)
-    # focused_frame_right = cv2.cvtColor(focused_frame_right, cv2.COLOR_BGR2GRAY)
-
-
-    d = 5  # edge size of neighborhood perimeter
-    sigma_r = 150  # sigma range
-    sigma_s = 100  # sigma spatial
-    edges = cv2.Canny(temp_clipped_frame, 10, 150)
-    
-    mask_corners = np.ones_like(edges) #mask for corners
-    mask_corners[:,:]=255
-    height, width = mask_corners.shape[:2]
-   
-    vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
-
-    """does it ignore all the other lanes?"""
-    # Fill the triangles in the mask
-    cv2.fillPoly(mask_corners, vertices, 0)
-    masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
-    cv2.imshow('Lane Detection',masked_corner_edges)
-    # Apply the mask to the edges
-    
- 
-
-    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=8 ,min_theta = -math.pi, max_theta = math.pi)
-    
-
-    # focused_frame_right = cv2.bilateralFilter(focused_frame_right , d, sigma_r, sigma_s)    
-    # edges_right = cv2.Canny(focused_frame_right , 100, 150, apertureSize=3)
-    
-    # lines_right = cv2.HoughLines(edges_right, 1, np.pi / 180, threshold=200)
-
-
-    # lines = np.concatenate((lines_left, lines_right), axis=0)
-
-    if lines is None:
-        return original_frame
-    
-
-    #vertical_lines = [line for line in lines if np.abs(line[0][1] - np.pi/2) < np.pi/6 and np.abs(line[0][1]) > np.pi/6]
-
+def filter_lines(lines):
     lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
 
 
@@ -109,7 +44,10 @@ def process_image(original_frame):
     old_rho = []
     epsilon_theta = np.pi / 20
     epsilon_rho = 20
-    filtered_lines = []
+    count_left, avg_rho_left, avg_theta_left = (0,0,0)
+    count_right, avg_rho_right, avg_theta_right = (0,0,0)
+
+
     # Draw the two longest lines on the image
     for line in lines:
         rho, theta = line[0]
@@ -121,9 +59,100 @@ def process_image(original_frame):
             continue
         old_rho.append(rho)
         old_theta.append(theta)
-        filtered_lines.append(line)
+        
 
-    lines = filtered_lines
+        if theta < 1.5:
+            # Update average
+            avg_rho_left += rho
+            avg_theta_left += theta
+            count_left += 1
+        else:
+            avg_rho_right += rho
+            avg_theta_right += theta
+            count_right += 1
+
+    if count_left > 0:
+        avg_rho_left /= count_left
+        avg_theta_left /= count_left
+
+
+    if count_right > 0:
+        avg_rho_right /= count_right
+        avg_theta_right /= count_right
+
+    
+ 
+    filtered_lines = np.array([[[avg_rho_left, avg_theta_left]],[[avg_rho_right, avg_theta_right]]])
+
+    return filtered_lines
+
+
+def region(image):
+
+    """MAYBE USE"""
+    height, width = image.shape
+    print()
+    triangle = np.array([
+                       [(int(width*0.2), height), (int(width*0.5), int(height*0.2)), (int(width*0.8), height)]
+                       ])
+    
+    mask = np.zeros_like(image)
+    
+    mask = cv2.fillPoly(mask, triangle, 255)
+    mask = cv2.bitwise_and(image, mask)
+    return mask
+
+
+def process_image(original_frame):
+    
+
+    #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
+    #clipped_frame = original_frame.copy()
+    
+    #roi_coordinates_focused = (220, 290, 100, 300)
+    roi_coordinates_focused = (600,1080,250,1500)
+    #focus on region of interest
+    roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
+    clipped_frame = roi.copy()
+    #cv2.imshow('Lane Detection',clipped_frame)
+    temp_clipped_frame = clipped_frame.copy()
+    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
+    #cv2.imshow('Lane Detection',temp_clipped_frame)
+    temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
+
+
+
+
+    """USE DILATE AND ERODE"""
+    d = 5  # edge size of neighborhood perimeter
+    sigma_r = 150  # sigma range
+    sigma_s = 100  # sigma spatial
+    edges = cv2.Canny(temp_clipped_frame, 10, 150)
+    
+    mask_corners = np.ones_like(edges) #mask for corners
+    mask_corners[:,:]=255
+    height, width = mask_corners.shape[:2]
+   
+    vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
+
+    # Fill the triangles in the mask
+    cv2.fillPoly(mask_corners, vertices, 0)
+    masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
+    # Apply the mask to the edges
+ 
+
+    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=30 ,min_theta = -math.pi, max_theta = math.pi)
+    
+
+
+    if lines is None:
+        return original_frame
+    
+
+    
+
+    lines = filter_lines(lines)
+    print(lines.shape)
     for line in lines:
         rho, theta = line[0]
         
@@ -132,12 +161,12 @@ def process_image(original_frame):
         b = np.sin(theta)
         x0 = a * rho
         y0 = b * rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
+        x1 = int(x0 + 1200 * (-b))
+        y1 = int(y0 + 1200 * (a))
+        x2 = int(x0 - 1200 * (-b))
+        y2 = int(y0 - 1200 * (a))
 
-        cv2.line(clipped_frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
+        cv2.line(clipped_frame, (x1, y1), (x2, y2), (255, 0, 0), 4)
 
     alpha = 0.1  # Adjust the alpha value for blending
     beta = 1.0 - alpha
@@ -151,7 +180,6 @@ def process_image(original_frame):
 if __name__ == "__main__":
 
     cap = cv2.VideoCapture('Driving.mp4')
-    # cap2 = cv2.VideoCapture('Driving.mp4')
     plt.figure(figsize=(20, 20))
 
     
@@ -159,16 +187,12 @@ if __name__ == "__main__":
     
     while(cap.isOpened() ): #and cap2.isOpened()):
         ret, frame = cap.read()
-        # ret2, frame2 = cap2.read()
         print(f"frame {counter}")
         counter+=1
-        if ret : #and ret2:
+        if ret :
             processed_frame = process_image(frame)
-            #cv2.resize(processed_frame,(processed_frame.shape[0]*2,processed_frame.shape[1]*2))
             cv2.imshow('Lane Detection',processed_frame)
-            #cv2.imshow('Lane Detection', processed_frame)
-            #processed_frame2 = process_image(frame2, 2)
-            #show_image('Lane Detection', processed_frame)
+
         else:
             break
         
