@@ -4,9 +4,10 @@ import matplotlib.pyplot as plt
 
 import math
 
-
+########### Importing Notice ###########
+    # original_frame.shape is (360, 640, 3)#
 prev_lines = None
-
+roi_coordinates_focused = (170, 360, 120,510)
 
 def filter_white_and_yellow(image):
     # Convert the image to the HSV color space
@@ -39,7 +40,31 @@ def show_image(img):
     plt.colorbar()
     plt.show()
 
+def image_manipulation(image):
+    temp_clipped_frame = image.copy()
+    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
+    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
+   
+    """USE DILATE AND ERODE"""
+    ##temp_clipped_frame=cv2.erode(temp_clipped_frame,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=1)
+    edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
+    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=2)
+    #cv2.imshow('111',temp_clipped_frame)
+    d = 5  # edge size of neighborhood perimeter
+    sigma_r = 150  # sigma range
+    sigma_s = 100  # sigma spatial
+    #edges = cv2.Canny(temp_clipped_frame, 10, 150)
+    #cv2.imshow('clipped_frame',edges)
+    ################################################################
+    #masking corners of roi
+    mask_corners = np.zeros_like(edges) #mask for corners
+    height, width = mask_corners.shape[:2]
+    vertices = np.array([[(0, height), (int(width*0.5), int(height*0.2)), (width,height)]], dtype=np.int32)
 
+    # Fill the triangles in the mask
+    cv2.fillPoly(mask_corners, vertices, 255)
+    masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
+    return masked_corner_edges
 
 def filter_lines(lines):
     global prev_lines
@@ -109,106 +134,79 @@ def filter_lines(lines):
         prev_lines = filtered_lines
         print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
         print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
-
-    
-
-
     return filtered_lines
-
-
-def region(image):
-
-    """MAYBE USE"""
-    height, width = image.shape
-    triangle = np.array([
-                       [(int(width*0.2), height), (int(width*0.5), int(height*0.2)), (int(width*0.8), height)]
-                       ])
     
-    mask = np.zeros_like(image)
-    
-    mask = cv2.fillPoly(mask, triangle, 255)
-    mask = cv2.bitwise_and(image, mask)
-    return mask
-
-
-def process_image(original_frame):
+def collectLines(image):
+    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=60 ,min_theta=0.5,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=60 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2
+    if l_lines is not None and r_lines is not None:
+        lines=np.concatenate((l_lines,r_lines))
+    elif l_lines is not None:
+        lines=l_lines
+    elif r_lines is not None:
+        lines=r_lines
+    else:
+        return None
+    return lines
     
 
-
-    
-    #roi2_coordinates_focused = (220, 290, 100, 300)
-    #roi1_coordinates_focused = (600,1080,250,1500)
-    roi_coordinates_focused = (200, 350, 150,500)
-
+def region(original_frame,type,image=None):
     #focus on region of interest
-    roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
-    clipped_frame = roi.copy()
-    temp_clipped_frame = clipped_frame.copy()
-    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-
-    """USE DILATE AND ERODE"""
-    d = 5  # edge size of neighborhood perimeter
-    sigma_r = 150  # sigma range
-    sigma_s = 100  # sigma spatial
-    edges = cv2.Canny(temp_clipped_frame, 10, 150)
-
-    mask_corners = np.ones_like(edges) #mask for corners
-    mask_corners[:,:]=255
-    height, width = mask_corners.shape[:2]
-   
-
-
-    vertices = np.array([[(0, 0), (width*0.4, 0), (0, int(height * 0.6))],[(width, 0), (width-width*0.4, 0), (width, int(height * 0.6))]], dtype=np.int32)
-
-    # Fill the triangles in the mask
-    cv2.fillPoly(mask_corners, vertices, 0)
-    masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
-    # Apply the mask to the edges
-
-
-
-    lines = cv2.HoughLines(masked_corner_edges, rho=0.5, theta=np.pi / 180, threshold=30 ,min_theta = -math.pi, max_theta = math.pi)
-    
-
-
-    if lines is None:
+    if type=="crop":
+        roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
+        clipped_frame = roi.copy()
+        return clipped_frame
+    else:
+        original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
         return original_frame
-    
 
-    
-
-    lines = filter_lines(lines)
-  
+def drawLines(image,lines):
     for line in lines:
-        
         rho, theta = line[0]
-        
-        
         a = np.cos(theta)
         b = np.sin(theta)
         x0 = a * rho
         y0 = b * rho
-        x1 = int(x0 + 1000 * (-b))
-        y1 = int(y0 + 1000 * (a))
-        x2 = int(x0 - 1000 * (-b))
-        y2 = int(y0 - 1000 * (a))
+        x1 = int(x0 + 500 * (-b))
+        y1 = int(y0 + 500 * (a))
+        x2 = int(x0 - 500 * (-b))
+        y2 = int(y0 - 500 * (a))
+        cv2.line(image, (x1, y1), (x2, y2), (255, 0, 0), 5)
+    return image
 
-        cv2.line(clipped_frame, (x1, y1), (x2, y2), (255, 0, 0), 4)
+def process_image(original_frame):
+    
 
-    alpha = 0.1  # Adjust the alpha value for blending
-    beta = 1.0 - alpha
-    result = cv2.addWeighted(roi, alpha, clipped_frame, beta, 0.0)
+    ################################################################
+    #focusing on region of interest   
+    cropped_frame= region(original_frame,"crop")
 
-    # Replace the ROI in the larger image with the blended result
-    original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = result
-    return original_frame
+    ################################################################
+    #image manipulation
+    manipulated_image = image_manipulation(cropped_frame)
+    cv2.imshow('manipulated image',manipulated_image)
+
+    #################################################################
+    #extracting lines
+    lines = collectLines(manipulated_image)
+    if lines is None:
+        return original_frame
+    print(f'how many lines found {len(lines)}')
+    print(lines)
+    lines = filter_lines(lines)
+    
+    #################################################################
+    #creating result
+    cropped_image_with_lines = drawLines(cropped_frame,lines)
+    result = region(original_frame,"paste",cropped_image_with_lines)
+    #################################################################
+
+    return result
 
 
 if __name__ == "__main__":
 
     cap = cv2.VideoCapture('Driving4.mp4')
-    plt.figure(figsize=(20, 20))
 
     
     counter=1
