@@ -59,14 +59,14 @@ def filter_lines(lines):
     # Draw the two longest lines on the image
     for line in lines:
         rho, theta = line[0]
-        #check if two lines have almost the same angle
-        if any(abs(theta - x) <= epsilon_theta for x in old_theta):
-            continue
-        #check if two lines have almost the same distance from 0,0
-        if any(abs(rho - x) <= epsilon_rho for x in old_rho):
-            continue
-        old_rho.append(rho)
-        old_theta.append(theta)
+        # #check if two lines have almost the same angle
+        # if any(abs(theta - x) <= epsilon_theta for x in old_theta):
+        #     continue
+        # #check if two lines have almost the same distance from 0,0
+        # if any(abs(rho - x) <= epsilon_rho for x in old_rho):
+        #     continue
+        # old_rho.append(rho)
+        # old_theta.append(theta)
         
 
         if theta < 1.5:
@@ -99,16 +99,19 @@ def filter_lines(lines):
             left_line = prev_lines[0]
         if count_right == 0:
             right_line = prev_lines[1]
+        
 
     if prev_lines is None and count_left > 0 and count_right > 0:
         filtered_lines = np.array([left_line,right_line])
         prev_lines = filtered_lines
     elif prev_lines is not None:
-        print(right_line[0][1])
-        print(count_right)
         filtered_lines = np.array([left_line,right_line])
         prev_lines = filtered_lines
+        print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
+        print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
+
     
+
 
     return filtered_lines
 
@@ -131,24 +134,18 @@ def region(image):
 def process_image(original_frame):
     
 
-    #original_frame = cv2.cvtColor(original_frame, cv2.COLOR_BGR2RGB)
-    #clipped_frame = original_frame.copy()
+
     
     #roi2_coordinates_focused = (220, 290, 100, 300)
-    roi_coordinates_focused = (600,1080,250,1500)
-    #roi_coordinates_focused = (150,500,200,350)
+    #roi1_coordinates_focused = (600,1080,250,1500)
+    roi_coordinates_focused = (200, 350, 150,500)
+
     #focus on region of interest
     roi=original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]]
     clipped_frame = roi.copy()
-    #cv2.imshow('Lane Detection',clipped_frame)
     temp_clipped_frame = clipped_frame.copy()
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    #cv2.imshow('Lane Detection',temp_clipped_frame)
     temp_clipped_frame = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-
-
-
-   
 
     """USE DILATE AND ERODE"""
     d = 5  # edge size of neighborhood perimeter
@@ -156,10 +153,6 @@ def process_image(original_frame):
     sigma_s = 100  # sigma spatial
     edges = cv2.Canny(temp_clipped_frame, 10, 150)
 
-
-
-    
-    
     mask_corners = np.ones_like(edges) #mask for corners
     mask_corners[:,:]=255
     height, width = mask_corners.shape[:2]
@@ -196,10 +189,10 @@ def process_image(original_frame):
         b = np.sin(theta)
         x0 = a * rho
         y0 = b * rho
-        x1 = int(x0 + 1200 * (-b))
-        y1 = int(y0 + 1200 * (a))
-        x2 = int(x0 - 1200 * (-b))
-        y2 = int(y0 - 1200 * (a))
+        x1 = int(x0 + 1000 * (-b))
+        y1 = int(y0 + 1000 * (a))
+        x2 = int(x0 - 1000 * (-b))
+        y2 = int(y0 - 1000 * (a))
 
         cv2.line(clipped_frame, (x1, y1), (x2, y2), (255, 0, 0), 4)
 
@@ -214,7 +207,7 @@ def process_image(original_frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving.mp4')
+    cap = cv2.VideoCapture('Driving4.mp4')
     plt.figure(figsize=(20, 20))
 
     
@@ -222,7 +215,7 @@ if __name__ == "__main__":
     
     while(cap.isOpened() ): #and cap2.isOpened()):
         ret, frame = cap.read()
-        print(f"frame {counter}")
+        #print(f"frame {counter}")
         counter+=1
         if ret :
             processed_frame = process_image(frame)
