@@ -69,9 +69,6 @@ def image_manipulation(image):
 def filter_lines(lines):
     global prev_lines
    
-   
-    lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
-
     count_left, avg_rho_left, avg_theta_left = (0,0,0)
     count_right, avg_rho_right, avg_theta_right = (0,0,0)
     filtered_lines = []
