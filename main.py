@@ -44,18 +44,12 @@ def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-   
-    """USE DILATE AND ERODE"""
-    ##temp_clipped_frame=cv2.erode(temp_clipped_frame,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=1)
     edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=2)
-    #cv2.imshow('111',temp_clipped_frame)
-    d = 5  # edge size of neighborhood perimeter
-    sigma_r = 150  # sigma range
-    sigma_s = 100  # sigma spatial
-    #edges = cv2.Canny(temp_clipped_frame, 10, 150)
-    #cv2.imshow('clipped_frame',edges)
-    ################################################################
+    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
+    
+    edges = cv2.GaussianBlur(edges, (9, 9), 2)
+    edges = cv2.Canny(edges, 50, 150)
+    cv2.imshow("edges", edges)
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
@@ -66,41 +60,37 @@ def image_manipulation(image):
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
     return masked_corner_edges
 
-def filter_lines(lines):
+def filterLines(lines):
     global prev_lines
-   
     count_left, avg_rho_left, avg_theta_left = (0,0,0)
     count_right, avg_rho_right, avg_theta_right = (0,0,0)
     filtered_lines = []
 
+    if lines is None:
+        lines = prev_lines
+    else:
+        # Draw the two longest lines on the image
+        for line in lines:
+            rho, theta = line[0]
+            if theta < 1.5:
+                # Update average
+                avg_rho_left += rho
+                avg_theta_left += theta
+                count_left += 1
+            else:
+                avg_rho_right += rho
+                avg_theta_right += theta
+                count_right += 1
 
-    # Draw the two longest lines on the image
-    for line in lines:
-        rho, theta = line[0]
-        if theta < 1.5:
-            # Update average
-            avg_rho_left += rho
-            avg_theta_left += theta
-            count_left += 1
-        else:
-            avg_rho_right += rho
-            avg_theta_right += theta
-            count_right += 1
+        if count_left > 0:
+            avg_rho_left /= count_left
+            avg_theta_left /= count_left
+        if count_right > 0:
+            avg_rho_right /= count_right
+            avg_theta_right /= count_right
 
-    if count_left > 0:
-        avg_rho_left /= count_left
-        avg_theta_left /= count_left
-
-
-    if count_right > 0:
-        avg_rho_right /= count_right
-        avg_theta_right /= count_right
-
-
-    
-    left_line = np.array([[avg_rho_left, avg_theta_left]])
-    right_line = np.array([[avg_rho_right, avg_theta_right]])
-
+        left_line = np.array([[avg_rho_left, avg_theta_left]])
+        right_line = np.array([[avg_rho_right, avg_theta_right]])
 
     #handle no lines found on frame
     if prev_lines is not None: 
@@ -131,7 +121,6 @@ def collectLines(image):
         return None
     return lines
     
-
 def region(original_frame,type,image=None):
     #focus on region of interest
     if type=="crop":
@@ -149,12 +138,56 @@ def drawLines(image,lines):
         b = np.sin(theta)
         x0 = a * rho
         y0 = b * rho
-        x1 = int(x0 + 500 * (-b))
-        y1 = int(y0 + 500 * (a))
-        x2 = int(x0 - 500 * (-b))
-        y2 = int(y0 - 500 * (a))
+        x1 = int(x0 + 1000 * (-b))
+        y1 = int(y0 + 1000 * (a))
+        x2 = int(x0 - 1000 * (-b))
+        y2 = int(y0 - 1000 * (a))
         cv2.line(image, (x1, y1), (x2, y2), (255, 0, 0), 5)
     return image
+
+def collectPolynomial(image):
+    # Find edge coordinates
+    edge_coordinates_left = np.column_stack(np.where(image[:, :image.shape[1] // 2] > 0))
+    edge_coordinates_right = np.column_stack(np.where(image[:, image.shape[1] // 2 :] > 0))
+
+    
+
+    cv2.imshow("help",image[:, image.shape[1] // 2 :])
+    # Fit a polynomial (you can adjust the degree)
+    degree_of_polynomial = 2
+    x_values_left, y_values_left = edge_coordinates_left[:, 1], edge_coordinates_left[:, 0]
+    x_values_right, y_values_right = edge_coordinates_right[:, 1], edge_coordinates_right[:, 0]
+    coefficients_left = np.polyfit(x_values_left, y_values_left, degree_of_polynomial)
+    coefficients_right = np.polyfit(x_values_right, y_values_right, degree_of_polynomial)
+
+
+    # Generate points along the fitted polynomial curve
+    x_curve_left = np.linspace(min(x_values_left), max(x_values_left), 1000)
+    y_curve_left = np.polyval(coefficients_left, x_curve_left)
+    x_curve_right = np.linspace(min(x_values_right), max(x_values_right), 1000)
+    y_curve_right = np.polyval(coefficients_right, x_curve_right)
+   
+    poly_left = (x_curve_left, y_curve_left)
+    poly_right = (x_curve_right, y_curve_right)
+
+    return (poly_left, poly_right)
+
+def drawPoly(image,poly):
+    poly_left = poly[0]
+    poly_right = poly[1]
+
+    x_curve = poly_left[0]
+    y_curve = poly_left[1]
+    for i in range(len(x_curve) - 1):
+        cv2.line(image, (int(x_curve[i]), int(y_curve[i])), (int(x_curve[i + 1]), int(y_curve[i + 1])), (0, 0, 255), 2)
+
+    x_curve = poly_right[0]
+    y_curve = poly_right[1]
+    for i in range(len(x_curve) - 1):
+        cv2.line(image, (int(x_curve[i]), int(y_curve[i])), (int(x_curve[i + 1]), int(y_curve[i + 1])), (0, 0, 255), 2)
+
+    return image
+
 
 def process_image(original_frame):
     
@@ -166,18 +199,20 @@ def process_image(original_frame):
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
-    cv2.imshow('manipulated image',manipulated_image)
 
     #################################################################
     #extracting lines
     lines = collectLines(manipulated_image)
-    if lines is None:
-        lines = prev_lines
-    lines = filter_lines(lines)
+    lines = filterLines(lines)
+
+    poly = collectPolynomial(manipulated_image)
+  
+
     
     #################################################################
     #creating result
-    cropped_image_with_lines = drawLines(cropped_frame,lines)
+    #cropped_image_with_lines = drawLines(cropped_frame, lines)
+    cropped_image_with_lines = drawPoly(cropped_frame, poly)
     result = region(original_frame,"paste",cropped_image_with_lines)
     #################################################################
 
