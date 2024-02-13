@@ -72,10 +72,6 @@ def filter_lines(lines):
    
     lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
 
-    old_theta = []
-    old_rho = []
-    epsilon_theta = np.pi / 20
-    epsilon_rho = 20
     count_left, avg_rho_left, avg_theta_left = (0,0,0)
     count_right, avg_rho_right, avg_theta_right = (0,0,0)
     filtered_lines = []
@@ -84,16 +80,6 @@ def filter_lines(lines):
     # Draw the two longest lines on the image
     for line in lines:
         rho, theta = line[0]
-        # #check if two lines have almost the same angle
-        # if any(abs(theta - x) <= epsilon_theta for x in old_theta):
-        #     continue
-        # #check if two lines have almost the same distance from 0,0
-        # if any(abs(rho - x) <= epsilon_rho for x in old_rho):
-        #     continue
-        # old_rho.append(rho)
-        # old_theta.append(theta)
-        
-
         if theta < 1.5:
             # Update average
             avg_rho_left += rho
@@ -114,26 +100,25 @@ def filter_lines(lines):
         avg_theta_right /= count_right
 
 
-
+    
     left_line = np.array([[avg_rho_left, avg_theta_left]])
     right_line = np.array([[avg_rho_right, avg_theta_right]])
 
 
+    #handle no lines found on frame
     if prev_lines is not None: 
         if count_left == 0:
             left_line = prev_lines[0]
         if count_right == 0:
             right_line = prev_lines[1]
         
-
+    #save lines for the next frame if they are new
     if prev_lines is None and count_left > 0 and count_right > 0:
         filtered_lines = np.array([left_line,right_line])
         prev_lines = filtered_lines
     elif prev_lines is not None:
         filtered_lines = np.array([left_line,right_line])
         prev_lines = filtered_lines
-        print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
-        print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
     return filtered_lines
     
 def collectLines(image):
@@ -190,9 +175,7 @@ def process_image(original_frame):
     #extracting lines
     lines = collectLines(manipulated_image)
     if lines is None:
-        return original_frame
-    print(f'how many lines found {len(lines)}')
-    print(lines)
+        lines = prev_lines
     lines = filter_lines(lines)
     
     #################################################################
