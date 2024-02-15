@@ -45,19 +45,12 @@ def image_manipulation(image):
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
     
-    """USE DILATE AND ERODE"""
-    ##temp_clipped_frame=cv2.erode(temp_clipped_frame,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=1)
-    #edges = cv2.bilateralFilter(edges, d=9, sigmaColor=75, sigmaSpace=150)
-    #edges = cv2.Canny(temp_clipped_frame, 100, 150)
+    edges = cv2.bilateralFilter(edges, d=9, sigmaColor=75, sigmaSpace=150)
+    edges = cv2.Canny(temp_clipped_frame, 100, 150)
     edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
     edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
+
     #edges[edges>10]=255
-    #cv2.imshow('111',temp_clipped_frame)
-    d = 5  # edge size of neighborhood perimeter
-    sigma_r = 150  # sigma range
-    sigma_s = 100  # sigma spatial
-    
-    #cv2.imshow('clipped_frame',edges)
     ################################################################
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
