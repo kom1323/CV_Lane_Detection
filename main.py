@@ -43,81 +43,64 @@ def show_image(img):
 def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
-    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_RGB2GRAY)
-   
+    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
+    
     """USE DILATE AND ERODE"""
     ##temp_clipped_frame=cv2.erode(temp_clipped_frame,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=1)
+    #edges = cv2.bilateralFilter(edges, d=9, sigmaColor=75, sigmaSpace=150)
+    #edges = cv2.Canny(temp_clipped_frame, 100, 150)
     edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=2)
+    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
+    #edges[edges>10]=255
     #cv2.imshow('111',temp_clipped_frame)
     d = 5  # edge size of neighborhood perimeter
     sigma_r = 150  # sigma range
     sigma_s = 100  # sigma spatial
-    #edges = cv2.Canny(temp_clipped_frame, 10, 150)
+    
     #cv2.imshow('clipped_frame',edges)
     ################################################################
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    vertices = np.array([[(0, height), (int(width*0.5), int(height*0.2)), (width,height)]], dtype=np.int32)
+    vertices = np.array([[(0, int(height*0.8)), (int(width*0.51), int(height*0.2)), (width,int(height*0.8))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
     return masked_corner_edges
 
-def filter_lines(lines):
+def average_lines(lines):
+    count = len(lines)
+    if count > 0:
+        avg_rho = np.mean(lines[:, 0, 0])
+        avg_theta = np.mean(lines[:, 0, 1])
+        return np.array([[avg_rho, avg_theta]])
+    return None
+
+def filter_lines(lines_left,lines_right):
     global prev_lines
-   
-   
-    lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
+    left_line=None
+    right_line=None
+    change_lanes=0
+    count_left=0
+    count_right=0
+    # lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
 
-    old_theta = []
-    old_rho = []
-    epsilon_theta = np.pi / 20
-    epsilon_rho = 20
-    count_left, avg_rho_left, avg_theta_left = (0,0,0)
-    count_right, avg_rho_right, avg_theta_right = (0,0,0)
+    # old_theta = []
+    # old_rho = []
+    # epsilon_theta = np.pi / 20
+    # epsilon_rho = 20
+    # count_left, avg_rho_left, avg_theta_left = (0,0,0)
+    # count_right, avg_rho_right, avg_theta_right = (0,0,0)
     filtered_lines = []
-
-
-    # Draw the two longest lines on the image
-    for line in lines:
-        rho, theta = line[0]
-        # #check if two lines have almost the same angle
-        # if any(abs(theta - x) <= epsilon_theta for x in old_theta):
-        #     continue
-        # #check if two lines have almost the same distance from 0,0
-        # if any(abs(rho - x) <= epsilon_rho for x in old_rho):
-        #     continue
-        # old_rho.append(rho)
-        # old_theta.append(theta)
-        
-
-        if theta < 1.5:
-            # Update average
-            avg_rho_left += rho
-            avg_theta_left += theta
-            count_left += 1
-        else:
-            avg_rho_right += rho
-            avg_theta_right += theta
-            count_right += 1
-
-    if count_left > 0:
-        avg_rho_left /= count_left
-        avg_theta_left /= count_left
-
-
-    if count_right > 0:
-        avg_rho_right /= count_right
-        avg_theta_right /= count_right
-
-
-
-    left_line = np.array([[avg_rho_left, avg_theta_left]])
-    right_line = np.array([[avg_rho_right, avg_theta_right]])
-
+    if lines_left is None and lines_right is None:
+        left_line,right_line = prev_lines[0],prev_lines[1]
+    if lines_left is not None:
+        count_left=len(lines_left) 
+        left_line = average_lines(lines_left)
+    if lines_right is not None:
+        count_right=len(lines_right)
+        right_line = average_lines(lines_right)
 
     if prev_lines is not None: 
         if count_left == 0:
@@ -132,23 +115,56 @@ def filter_lines(lines):
     elif prev_lines is not None:
         filtered_lines = np.array([left_line,right_line])
         prev_lines = filtered_lines
-        print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
-        print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
-    return filtered_lines
-    
+    change_lanes= check_lane_change(filtered_lines)
+            #return None,change_lanes
+        # print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
+        # print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
+    return filtered_lines,change_lanes
+def check_lane_change(lines):
+        if lines is not None and len(lines) == 2:
+            theta_diff = lines[0][0][1] - lines[1][0][1]
+            print(theta_diff)
+            if theta_diff < -2:
+                print("Turn right")
+                return 1
+            elif theta_diff > 2:
+                print("Turn left")
+                return -1
+        return 0
+
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=60 ,min_theta=0.5,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=60 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2
-    if l_lines is not None and r_lines is not None:
-        lines=np.concatenate((l_lines,r_lines))
-    elif l_lines is not None:
-        lines=l_lines
-    elif r_lines is not None:
-        lines=r_lines
-    else:
-        return None
-    return lines
-    
+    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=100 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=100 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2
+    return l_lines,r_lines
+    # if l_lines is not None and r_lines is not None:
+    #     lines=np.concatenate((l_lines,r_lines))
+    # elif l_lines is not None:
+    #     lines=l_lines
+    # elif r_lines is not None:
+    #     lines=r_lines
+    # else:
+    #     return None
+    # return lines
+
+
+
+
+
+
+# def proximity(image):
+#     height, width = image.shape[:2]
+#     vertices = np.array([[(0, height), (int(width*0.51), int(height*0.2)), (width,height)]], dtype=np.int32)
+#     points_inside_triangle = 0
+#     points_on = 0
+#     for row in range(height):
+#         for column in range(width):
+#             distance = cv2.pointPolygonTest(vertices[0], (row, column), True)
+#             if distance > 0:
+#             # Pixel is inside the triangle
+#                 points_inside_triangle += 1
+#                 if image[row][column]>0:
+#                     points_on+=1
+#     return 1-(points_on/points_inside_triangle)
 
 def region(original_frame,type,image=None):
     #focus on region of interest
@@ -159,21 +175,42 @@ def region(original_frame,type,image=None):
     else:
         original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
         return original_frame
+    
 
-def drawLines(image,lines):
+#function that caulatres length based on how full is the triangle
+#let's define it for start to 50%
+def drawLines(image,lines,length_lines):
     for line in lines:
         rho, theta = line[0]
-        a = np.cos(theta)
-        b = np.sin(theta)
-        x0 = a * rho
-        y0 = b * rho
-        x1 = int(x0 + 500 * (-b))
-        y1 = int(y0 + 500 * (a))
-        x2 = int(x0 - 500 * (-b))
-        y2 = int(y0 - 500 * (a))
+        m = -1/np.tan(theta)
+        b = rho /np.sin(theta)
+        y1 = int(image.shape[0])
+        x1 = int((y1-b)/m)
+        y2 = int(image.shape[0]-image.shape[0]*length_lines)
+        x2 = int((y2-b)/m)
         cv2.line(image, (x1, y1), (x2, y2), (255, 0, 0), 5)
     return image
 
+def lane_notifier(original_frame,side):
+    text = f"Taking {side} Lane"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 1.5
+    font_thickness = 2
+    font_color = (255, 255, 255)  # White color in BGR format
+    background_color = (0, 0, 0)  # Black color in BGR format
+
+    # Get text size to determine the position
+    text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+    text_position = ((original_frame.shape[1] - text_size[0]) // 2, 50)  # Adjust the Y-coordinate as needed
+
+    # Create a black background for the text
+    text_background = np.zeros_like(original_frame)
+    cv2.putText(text_background, text, text_position, font, font_scale, font_color, font_thickness, cv2.LINE_AA)
+
+    # Blend the text background with the original image
+    alpha = 0.7  # Adjust the transparency of the text background
+    result = cv2.addWeighted(original_frame, 1, text_background, alpha, 0)
+    return result
 def process_image(original_frame):
     
 
@@ -188,19 +225,25 @@ def process_image(original_frame):
 
     #################################################################
     #extracting lines
-    lines = collectLines(manipulated_image)
-    if lines is None:
+    lines_left, lines_right = collectLines(manipulated_image)
+    if lines_left is None and lines_right is None:
         return original_frame
-    print(f'how many lines found {len(lines)}')
-    print(lines)
-    lines = filter_lines(lines)
+    # print(f'how many lines found {len(lines)}')
+    # print(lines)
+    lines,change_lanes = filter_lines(lines_left,lines_right)
     
+
     #################################################################
     #creating result
-    cropped_image_with_lines = drawLines(cropped_frame,lines)
+    length_lines=0.5#proximity(manipulated_image)
+    #print(f'length_lines: {length_lines}')
+    cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
     result = region(original_frame,"paste",cropped_image_with_lines)
     #################################################################
-
+    if change_lanes==1:
+        return lane_notifier(result,"left")
+    elif change_lanes==-1:
+        return lane_notifier(result,"right")
     return result
 
 
@@ -213,9 +256,15 @@ if __name__ == "__main__":
     
     while(cap.isOpened() ): #and cap2.isOpened()):
         ret, frame = cap.read()
+        output_path = 'output_frame.jpg'
+
+        # Save the frame as an image file
+
+        cv2.imwrite(output_path, cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
         #print(f"frame {counter}")
         counter+=1
         if ret :
+
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
 
