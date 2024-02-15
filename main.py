@@ -8,7 +8,8 @@ import math
     # original_frame.shape is (360, 640, 3)#
 prev_lines = np.array([None,None])
 roi_coordinates_focused = (500, 720, 200,900)
-
+can_change_lines=True
+switch_direction=0
 def filter_white_and_yellow(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -55,8 +56,7 @@ def image_manipulation(image):
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    print(width,height)
-    vertices = np.array([[(0, int(height)), (int(width*0.45), 0), (int(width*0.65), 0) ,(width,int(height))]], dtype=np.int32)
+    vertices = np.array([[(0, int(height)), (int(width*0.47), 0), (int(width*0.62), 0) ,(width,int(height))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
@@ -73,54 +73,44 @@ def average_lines(lines):
 
 def filter_lines(lines_left,lines_right):
     global prev_lines
+    global switch_direction
+    global can_change_lines
     left_line=None
     right_line=None
     change_lanes=0
     count_left=0
     count_right=0
 
-    filtered_lines = []
+    filtered_lines = [None,None]
 
-    
-    #left_line,right_line = prev_lines[0],prev_lines[1]
 
 
     if lines_left is not None:
         left_line = average_lines(lines_left)
-        filtered_lines.append(left_line)    
+        filtered_lines[0]=left_line 
     if lines_right is not None:
         right_line = average_lines(lines_right)
-        filtered_lines.append(right_line)
+        filtered_lines[1]=right_line
     
-    
-#    filtered_lines = np.array([left_line,right_line])
-    # if filtered_lines[0] is not None:
-    #     prev_lines = filtered_lines[0]
-    # if filtered_lines[1] is not None:
-    #     prev_lines[1] = filtered_lines[1]
-
-    # if prev_lines is None and count_left > 0 and count_right > 0:
-    #     filtered_lines = np.array([left_line,right_line])
-    #     prev_lines = filtered_lines
-    # elif prev_lines is not None:
-    #     filtered_lines = np.array([left_line,right_line])
-    #     prev_lines = filtered_lines
+#  
     change_lanes= check_lane_change(filtered_lines)
+    if left_line is not None and right_line is not None:
+        can_change_lines=True
+        switch_direction=0
+    if change_lanes!=0 and can_change_lines==True:
+        can_change_lines=False
+        switch_direction=change_lanes
 
+    return filtered_lines
 
-    return filtered_lines,change_lanes
-
-def check_lane_change(lines):        
-        if lines is not None and len(lines) == 2:
-            theta_diff = lines[0][0][1] - lines[1][0][1]
-            print(theta_diff)
-            if theta_diff < -2:
-                print("Turn right")
-                return 1
-            elif theta_diff > 2:
-                print("Turn left")
-                return -1
-        return 0
+def check_lane_change(lines):
+        dirc_val=0       
+        if lines[0] is not None and lines[1] is None:
+            dirc_val= -1
+        elif lines[1] is not None and lines[0] is None:
+            dirc_val= 1
+        return dirc_val
+       
 
 
 
@@ -135,7 +125,6 @@ def region(original_frame,type,image=None):
         return original_frame
     
 
-#function that caulatres length based on how full is the triangle
 #let's define it for start to 50%
 def drawLines(image,lines,length_lines):
     
@@ -143,34 +132,27 @@ def drawLines(image,lines,length_lines):
         if line is None:
             continue
         rho, theta = line[0]
-        m = -1/np.tan(theta)
-        b = rho /np.sin(theta)
-        y1 = int(image.shape[0])
-        x1 = int((y1-b)/m)
-        y2 = int(image.shape[0]-image.shape[0]*length_lines)
-        x2 = int((y2-b)/m)
-        cv2.line(image, (x1, y1), (x2, y2), (255, 0, 0), 5)
+        a = np.cos(theta)
+        b = np.sin(theta)
+        x0 = a * rho
+        y0 = b * rho
+        x1 = int(x0 + 1000 * (-b))
+        y1 = int(y0 + 1000 * (a))
+        x2 = int(x0 - 1000 * (-b))
+        y2 = int(y0 - 1000 * (a))
+        cv2.line(image, (x1, y1), (x2, y2), (0, 0, 255), 5)
     return image
 
-
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=70 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=70 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=0.1,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
-    # if l_lines is not None and r_lines is not None:
-    #     lines=np.concatenate((l_lines,r_lines))
-    # elif l_lines is not None:
-    #     lines=l_lines
-    # elif r_lines is not None:
-    #     lines=r_lines
-    # else:
-    #     return None
-    # return lines
+
 
 def lane_notifier(original_frame,side):
     text = f"Taking {side} Lane"
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 1.5
+    font_scale = 4
     font_thickness = 2
     font_color = (255, 255, 255)  # White color in BGR format
     background_color = (0, 0, 0)  # Black color in BGR format
@@ -188,7 +170,8 @@ def lane_notifier(original_frame,side):
     result = cv2.addWeighted(original_frame, 1, text_background, alpha, 0)
     return result
 def process_image(original_frame):
-    
+    global switch_direction
+    global can_change_lines
     ################################################################
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
@@ -201,30 +184,27 @@ def process_image(original_frame):
     #################################################################
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
-    if lines_left is None and lines_right is None:
-        return original_frame
-    # print(f'how many lines found {len(lines)}')
-    # print(lines)
-    lines,change_lanes = filter_lines(lines_left,lines_right)
+    lines = filter_lines(lines_left,lines_right)
     
 
     #################################################################
     #creating result
-    length_lines=1#proximity(manipulated_image)
-    #print(f'length_lines: {length_lines}')
+    length_lines=1
     cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
     result = region(original_frame,"paste",cropped_image_with_lines)
     #################################################################
-    if change_lanes==1:
-        return lane_notifier(result,"left")
-    elif change_lanes==-1:
-        return lane_notifier(result,"right")
+    #print(f'can_change_lines:{can_change_lines}, switch_direction:{switch_direction}')
+    if can_change_lines==False:
+        if switch_direction==-1:
+            return lane_notifier(result,"left")
+        elif switch_direction==1:
+            return lane_notifier(result,"right")
     return result
 
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-pass.mp4')
+    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
 
     
     counter=1
