@@ -10,10 +10,14 @@ prev_lines = np.array([None,None])
 roi_coordinates_focused = (500, 720, 200,900)
 can_change_lines=True
 switch_direction=0
-def filter_white_and_yellow(image):
+def filter_white_yellow_and_gray(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
+    hue_range = (108, 130)
+    saturation_range = (15, 85)
+    value_range = (90, 130)
+    lower_custom = np.array([hue_range[0], saturation_range[0], value_range[0]], dtype=np.uint8)
+    upper_custom = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
     # Define the lower and upper bounds for white color in HSV
     lower_white = np.array([0, 0, 180], dtype=np.uint8)
     upper_white = np.array([255, 30, 255], dtype=np.uint8)
@@ -22,12 +26,15 @@ def filter_white_and_yellow(image):
     lower_yellow = np.array([20, 100, 100], dtype=np.uint8)
     upper_yellow = np.array([40, 255, 255], dtype=np.uint8)
 
-    # Create masks for white and yellow regions
+   
+
+    # Create masks for white, yellow, and gray regions
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
-    yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
+    #yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
+    custom_mask = cv2.inRange(hsv_image, lower_custom, upper_custom)
 
     # Combine the masks to get the final mask
-    final_mask = cv2.bitwise_or(white_mask, yellow_mask)
+    final_mask = cv2.bitwise_or(white_mask, custom_mask)
 
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
@@ -44,12 +51,16 @@ def show_image(img):
 def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
-    temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
+    temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
+    temp_clipped_frame[temp_clipped_frame>0]=255
+    cv2.imshow('manipulated image',temp_clipped_frame)
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
     edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
     edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
+    cv2.imshow('manipulated image',edges)
     edges = cv2.Canny(temp_clipped_frame, 100, 150)
     
+
     
     #edges[edges>10]=255
     ################################################################
@@ -127,7 +138,8 @@ def region(original_frame,type,image=None):
 
 #let's define it for start to 50%
 def drawLines(image,lines,length_lines):
-    
+    if lines is None:
+        return image
     for line in lines:
         if line is None:
             continue
@@ -144,8 +156,8 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=0.1,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1.5, theta=np.pi / 90, threshold=50 ,min_theta=0.1,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1.5, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
 
 
@@ -155,11 +167,11 @@ def lane_notifier(original_frame,side):
     font_scale = 4
     font_thickness = 2
     font_color = (255, 255, 255)  # White color in BGR format
-    background_color = (0, 0, 0)  # Black color in BGR format
+    background_color = (original_frame.shape[0]*0.2, 0, 0)  # Black color in BGR format
 
     # Get text size to determine the position
     text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
-    text_position = ((original_frame.shape[1] - text_size[0]) // 2, 50)  # Adjust the Y-coordinate as needed
+    text_position = ((original_frame.shape[1] - text_size[0]) // 4, 100)  # Adjust the Y-coordinate as needed
 
     # Create a black background for the text
     text_background = np.zeros_like(original_frame)
@@ -179,7 +191,7 @@ def process_image(original_frame):
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
-    cv2.imshow('manipulated image',manipulated_image)
+    #cv2.imshow('manipulated image',manipulated_image)
 
     #################################################################
     #extracting lines
@@ -204,25 +216,28 @@ def process_image(original_frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
+    cap = cv2.VideoCapture('Driving-pass.mp4')
 
     
     counter=1
     
     while(cap.isOpened() ): #and cap2.isOpened()):
         ret, frame = cap.read()
-        output_path = 'output_frame.jpg'
+        output_path = f'C:\\temp\\frames\\frame{counter}.jpg'
 
         # Save the frame as an image file
 
-        cv2.imwrite(output_path, cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
-        #print(f"frame {counter}")
+       #cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
+        print(f"frame {counter}")
+        if counter>360:
+            pass
         counter+=1
         if ret :
 
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
-
+            if counter%5==0:
+                cv2.imwrite(output_path, processed_frame)
         else:
             break
         
