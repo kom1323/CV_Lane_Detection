@@ -6,7 +6,7 @@ import math
 
 ########### Importing Notice ###########
     # original_frame.shape is (360, 640, 3)#
-prev_lines = None
+prev_lines = np.array([None,None])
 roi_coordinates_focused = (500, 720, 200,900)
 
 def filter_white_and_yellow(image):
@@ -42,14 +42,14 @@ def show_image(img):
 
 def image_manipulation(image):
     temp_clipped_frame = image.copy()
+    temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.bilateralFilter(edges, d=9, sigmaColor=75, sigmaSpace=150)
+    edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
+    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
     edges = cv2.Canny(temp_clipped_frame, 100, 150)
     
-    #edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-    #edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-
+    
     #edges[edges>10]=255
     ################################################################
     #masking corners of roi
@@ -80,34 +80,37 @@ def filter_lines(lines_left,lines_right):
     count_right=0
 
     filtered_lines = []
-    if lines_left is None and lines_right is None:
-        left_line,right_line = prev_lines[0],prev_lines[1]
+
+    
+    #left_line,right_line = prev_lines[0],prev_lines[1]
+
+
     if lines_left is not None:
-        count_left=len(lines_left) 
         left_line = average_lines(lines_left)
+        filtered_lines.append(left_line)    
     if lines_right is not None:
-        count_right=len(lines_right)
         right_line = average_lines(lines_right)
+        filtered_lines.append(right_line)
+    
+    
+#    filtered_lines = np.array([left_line,right_line])
+    # if filtered_lines[0] is not None:
+    #     prev_lines = filtered_lines[0]
+    # if filtered_lines[1] is not None:
+    #     prev_lines[1] = filtered_lines[1]
 
-    if prev_lines is not None: 
-        if count_left == 0:
-            left_line = prev_lines[0]
-        if count_right == 0:
-            right_line = prev_lines[1]
-        
-
-    if prev_lines is None and count_left > 0 and count_right > 0:
-        filtered_lines = np.array([left_line,right_line])
-        prev_lines = filtered_lines
-    elif prev_lines is not None:
-        filtered_lines = np.array([left_line,right_line])
-        prev_lines = filtered_lines
+    # if prev_lines is None and count_left > 0 and count_right > 0:
+    #     filtered_lines = np.array([left_line,right_line])
+    #     prev_lines = filtered_lines
+    # elif prev_lines is not None:
+    #     filtered_lines = np.array([left_line,right_line])
+    #     prev_lines = filtered_lines
     change_lanes= check_lane_change(filtered_lines)
-            #return None,change_lanes
-        # print("rho diff: ", prev_lines[0][0][0] -  prev_lines[1][0][0])
-        # print("theta diff: ", prev_lines[0][0][1] -  prev_lines[1][0][1])
+
+
     return filtered_lines,change_lanes
-def check_lane_change(lines):
+
+def check_lane_change(lines):        
         if lines is not None and len(lines) == 2:
             theta_diff = lines[0][0][1] - lines[1][0][1]
             print(theta_diff)
@@ -135,7 +138,10 @@ def region(original_frame,type,image=None):
 #function that caulatres length based on how full is the triangle
 #let's define it for start to 50%
 def drawLines(image,lines,length_lines):
+    
     for line in lines:
+        if line is None:
+            continue
         rho, theta = line[0]
         m = -1/np.tan(theta)
         b = rho /np.sin(theta)
@@ -148,8 +154,8 @@ def drawLines(image,lines,length_lines):
 
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=70 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=70 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
     # if l_lines is not None and r_lines is not None:
     #     lines=np.concatenate((l_lines,r_lines))
