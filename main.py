@@ -7,14 +7,14 @@ import math
 ########### Importing Notice ###########
     # original_frame.shape is (360, 640, 3)#
 prev_lines = None
-roi_coordinates_focused = (170, 360, 120,510)
+roi_coordinates_focused = (500, 720, 200,900)
 
 def filter_white_and_yellow(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
     # Define the lower and upper bounds for white color in HSV
-    lower_white = np.array([0, 0, 200], dtype=np.uint8)
+    lower_white = np.array([0, 0, 180], dtype=np.uint8)
     upper_white = np.array([255, 30, 255], dtype=np.uint8)
 
     # Define the lower and upper bounds for yellow color in HSV
@@ -62,7 +62,8 @@ def image_manipulation(image):
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    vertices = np.array([[(0, int(height*0.8)), (int(width*0.51), int(height*0.2)), (width,int(height*0.8))]], dtype=np.int32)
+    print(width,height)
+    vertices = np.array([[(0, int(height)), (int(width*0.45), 0), (int(width*0.65), 0) ,(width,int(height))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
@@ -146,26 +147,6 @@ def collectLines(image):
     #     return None
     # return lines
 
-
-
-
-
-
-# def proximity(image):
-#     height, width = image.shape[:2]
-#     vertices = np.array([[(0, height), (int(width*0.51), int(height*0.2)), (width,height)]], dtype=np.int32)
-#     points_inside_triangle = 0
-#     points_on = 0
-#     for row in range(height):
-#         for column in range(width):
-#             distance = cv2.pointPolygonTest(vertices[0], (row, column), True)
-#             if distance > 0:
-#             # Pixel is inside the triangle
-#                 points_inside_triangle += 1
-#                 if image[row][column]>0:
-#                     points_on+=1
-#     return 1-(points_on/points_inside_triangle)
-
 def region(original_frame,type,image=None):
     #focus on region of interest
     if type=="crop":
@@ -213,7 +194,6 @@ def lane_notifier(original_frame,side):
     return result
 def process_image(original_frame):
     
-
     ################################################################
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
@@ -249,7 +229,7 @@ def process_image(original_frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving4.mp4')
+    cap = cv2.VideoCapture('Driving-pass.mp4')
 
     
     counter=1
