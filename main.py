@@ -44,11 +44,11 @@ def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame=filter_white_and_yellow(temp_clipped_frame)
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
-    
     edges = cv2.bilateralFilter(edges, d=9, sigmaColor=75, sigmaSpace=150)
     edges = cv2.Canny(temp_clipped_frame, 100, 150)
-    edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
+    
+    #edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
+    #edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
 
     #edges[edges>10]=255
     ################################################################
@@ -78,14 +78,7 @@ def filter_lines(lines_left,lines_right):
     change_lanes=0
     count_left=0
     count_right=0
-    # lines = [line for line in lines if abs(line[0][1] - np.pi / 2) > np.radians(30) and abs(line[0][1] - np.pi / 2) < np.radians(90)]
 
-    # old_theta = []
-    # old_rho = []
-    # epsilon_theta = np.pi / 20
-    # epsilon_rho = 20
-    # count_left, avg_rho_left, avg_theta_left = (0,0,0)
-    # count_right, avg_rho_right, avg_theta_right = (0,0,0)
     filtered_lines = []
     if lines_left is None and lines_right is None:
         left_line,right_line = prev_lines[0],prev_lines[1]
@@ -126,19 +119,7 @@ def check_lane_change(lines):
                 return -1
         return 0
 
-def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=100 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=100 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2
-    return l_lines,r_lines
-    # if l_lines is not None and r_lines is not None:
-    #     lines=np.concatenate((l_lines,r_lines))
-    # elif l_lines is not None:
-    #     lines=l_lines
-    # elif r_lines is not None:
-    #     lines=r_lines
-    # else:
-    #     return None
-    # return lines
+
 
 def region(original_frame,type,image=None):
     #focus on region of interest
@@ -164,6 +145,21 @@ def drawLines(image,lines,length_lines):
         x2 = int((y2-b)/m)
         cv2.line(image, (x1, y1), (x2, y2), (255, 0, 0), 5)
     return image
+
+
+def collectLines(image):
+    l_lines =cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=0,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=4) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    return l_lines,r_lines
+    # if l_lines is not None and r_lines is not None:
+    #     lines=np.concatenate((l_lines,r_lines))
+    # elif l_lines is not None:
+    #     lines=l_lines
+    # elif r_lines is not None:
+    #     lines=r_lines
+    # else:
+    #     return None
+    # return lines
 
 def lane_notifier(original_frame,side):
     text = f"Taking {side} Lane"
@@ -208,7 +204,7 @@ def process_image(original_frame):
 
     #################################################################
     #creating result
-    length_lines=0.5#proximity(manipulated_image)
+    length_lines=1#proximity(manipulated_image)
     #print(f'length_lines: {length_lines}')
     cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
     result = region(original_frame,"paste",cropped_image_with_lines)
