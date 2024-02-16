@@ -7,13 +7,13 @@ import math
 ########### Importing Notice ###########
     # original_frame.shape is (360, 640, 3)#
 prev_lines = np.array([None,None])
-roi_coordinates_focused = (500, 720, 200,900)
+roi_coordinates_focused = (500, 720, 125,900)
 can_change_lines=True
 switch_direction=0
 def filter_white_yellow_and_gray(image):
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hue_range = (108, 130)
+    hue_range = (108, 122)
     saturation_range = (15, 85)
     value_range = (90, 130)
     lower_custom = np.array([hue_range[0], saturation_range[0], value_range[0]], dtype=np.uint8)
@@ -53,25 +53,32 @@ def image_manipulation(image):
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
     temp_clipped_frame[temp_clipped_frame>0]=255
-    cv2.imshow('manipulated image',temp_clipped_frame)
-    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
-    edges=cv2.dilate(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=4)
-    edges=cv2.erode(edges,np.array([[1,0,1],[0,1,0],[1,0,1]],dtype=np.uint8),iterations=3)
-    cv2.imshow('manipulated image',edges)
-    edges = cv2.Canny(temp_clipped_frame, 100, 150)
     
+    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
+    kernel_size = 8
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    edges = cv2.dilate(edges, kernel, iterations=1)
 
+    kernel_size = 5
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    edges = cv2.erode(edges, kernel, iterations=1)
+    # kernel_size = 5
+    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
+    # edges = cv2.erode(edges, kernel, iterations=1)
+    edges = cv2.Canny(edges, 10, 150)
+    
     
     #edges[edges>10]=255
     ################################################################
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    vertices = np.array([[(0, int(height)), (int(width*0.47), 0), (int(width*0.62), 0) ,(width,int(height))]], dtype=np.int32)
+    vertices = np.array([[(0, int(height)), (int(width*0.5), 0), (int(width*0.65), 0) ,(width,int(height))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
+    cv2.imshow('manipulated image',masked_corner_edges)
     return masked_corner_edges
 
 def average_lines(lines):
@@ -156,13 +163,40 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1.5, theta=np.pi / 90, threshold=50 ,min_theta=0.1,max_theta=1)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1.5, theta=np.pi / 90, threshold=50 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=30 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=30 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
 
+def calculate_real_distance(pixel_size, focal_length):
+    # Assuming a simple linear relationship between pixel size and real-world distance
+    # You may need a more sophisticated calibration for accurate results
+    real_size = 3.0  # Adjust based on the actual size of a vehicle in the scene
+    real_distance = focal_length * real_size / pixel_size
+    return real_distance
 
+
+def draw_proximity_warning(frame, vehicles, focal_length):
+    for (x, y, w, h) in vehicles:
+        # Draw bounding boxes around detected vehicles
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+
+        # Calculate pixel size (average of width and height)
+        pixel_size = (w + h) / 2
+
+        # Calculate real-world distance
+        real_distance = calculate_real_distance(pixel_size, focal_length)
+
+        # Add real-world distance to the bounding box
+        text = f"{real_distance:.2f} meters"
+        cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+    # Add a warning message
+    warning_text = "Proximity Warning: Vehicles Nearby!"
+    cv2.putText(frame, warning_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2, cv2.LINE_AA)
+
+    return frame
 def lane_notifier(original_frame,side):
-    text = f"Taking {side} Lane"
+    text = f"Taking Lane {side}"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 4
     font_thickness = 2
@@ -197,7 +231,11 @@ def process_image(original_frame):
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
     lines = filter_lines(lines_left,lines_right)
-    
+    # Detect vehicles in the frame
+    #vehicles = detect_vehicles(original_frame)
+
+    # Draw proximity warning on the frame with real-world distance information
+    #frame_with_warning = draw_proximity_warning(original_frame.copy(), vehicles, focal_length)
 
     #################################################################
     #creating result
@@ -206,6 +244,7 @@ def process_image(original_frame):
     result = region(original_frame,"paste",cropped_image_with_lines)
     #################################################################
     #print(f'can_change_lines:{can_change_lines}, switch_direction:{switch_direction}')
+    #frame_with_warning
     if can_change_lines==False:
         if switch_direction==-1:
             return lane_notifier(result,"left")
@@ -213,10 +252,21 @@ def process_image(original_frame):
             return lane_notifier(result,"right")
     return result
 
+def detect_vehicles(frame):
+    # Load the pre-trained vehicle detection Haarcascades classifier
+    car_cascade = cv2.CascadeClassifier('haarcascade_car.xml')  # Update with the correct path
+
+    # Convert the frame to grayscale for Haarcascades
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # Detect vehicles in the frame
+    vehicles = car_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+    return vehicles
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-pass.mp4')
+    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
 
     
     counter=1
@@ -229,8 +279,7 @@ if __name__ == "__main__":
 
        #cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
         print(f"frame {counter}")
-        if counter>360:
-            pass
+
         counter+=1
         if ret :
 
