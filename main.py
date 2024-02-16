@@ -5,12 +5,54 @@ import matplotlib.pyplot as plt
 import math
 
 ########### Importing Notice ###########
-    # original_frame.shape is (360, 640, 3)#
 prev_lines = np.array([None,None])
 roi_coordinates_focused = (500, 720, 125,900)
 can_change_lines=True
 switch_direction=0
+
+def nightLaneColorCalculate():
+
+        # RGB values to be included in the HSV range
+    base_rgb_values = (123, 111, 108)
+
+    # Define the range for each channel (+/- 10)
+    rgb_range = 10
+
+    # Generate a list of RGB values within the specified range
+    rgb_values_list = [
+        (
+            np.clip(base_rgb_values[0] + i, 0, 255),
+            np.clip(base_rgb_values[1] + j, 0, 255),
+            np.clip(base_rgb_values[2] + k, 0, 255)
+        )
+        for i in range(-rgb_range, rgb_range + 1)
+        for j in range(-rgb_range, rgb_range + 1)
+        for k in range(-rgb_range, rgb_range + 1)
+    ]
+
+    # Convert the list of RGB values to a list of corresponding HSV values
+    hsv_values_list = [cv2.cvtColor(np.uint8([[rgb]]), cv2.COLOR_RGB2HSV)[0][0] for rgb in rgb_values_list]
+
+    # Calculate the ranges for hue, saturation, and value
+    hue_range = (min(hsv_values_list, key=lambda x: x[0])[0], max(hsv_values_list, key=lambda x: x[0])[0])
+    saturation_range = (15, 85)
+    value_range = (90, 130)
+
+    # Create lower and upper custom HSV arrays
+    lower_custom_night = np.array([hue_range[0], saturation_range[0], value_range[0]], dtype=np.uint8)
+    upper_custom_night = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
+
+    return lower_custom_night, upper_custom_night
+
+
+
+lower_custom_night, upper_custom_night = nightLaneColorCalculate() ##NOTICE THIS IS NOT A FUNCTION TESTTTTTT
+
+
 def filter_white_yellow_and_gray(image):
+
+    global custom_mask_night
+
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue_range = (108, 122)
@@ -27,14 +69,19 @@ def filter_white_yellow_and_gray(image):
     upper_yellow = np.array([40, 255, 255], dtype=np.uint8)
 
    
-
     # Create masks for white, yellow, and gray regions
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
     #yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
     custom_mask = cv2.inRange(hsv_image, lower_custom, upper_custom)
+   
+    #night white mask
+    
+    custom_mask_night = cv2.inRange(hsv_image, lower_custom_night, upper_custom_night)
 
     # Combine the masks to get the final mask
     final_mask = cv2.bitwise_or(white_mask, custom_mask)
+    final_mask = cv2.bitwise_or(final_mask, custom_mask_night)
+
 
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
@@ -51,6 +98,7 @@ def show_image(img):
 def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
+
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
     temp_clipped_frame[temp_clipped_frame>0]=255
     
@@ -58,13 +106,12 @@ def image_manipulation(image):
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.dilate(edges, kernel, iterations=1)
+    cv2.imshow('manipulated image',temp_clipped_frame)
 
     kernel_size = 5
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.erode(edges, kernel, iterations=1)
-    # kernel_size = 5
-    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
-    # edges = cv2.erode(edges, kernel, iterations=1)
+
     edges = cv2.Canny(edges, 10, 150)
     
     
@@ -245,14 +292,13 @@ def process_image(original_frame):
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
-    #cv2.imshow('manipulated image',manipulated_image)
 
     #################################################################
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
     lines = filter_lines(lines_left,lines_right)
     # Detect vehicles in the frame
-    vehicles = detect_vehicles(original_frame)
+    #vehicles = detect_vehicles(original_frame)
 
     # Draw proximity warning on the frame with real-world distance information
     
@@ -261,8 +307,8 @@ def process_image(original_frame):
     #creating result
     length_lines=1
     cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
-    result = region(original_frame,"paste",cropped_image_with_lines)
-    frame_with_warning = draw_proximity_warning(result, vehicles, focal_length)
+    frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
+    #frame_with_warning = draw_proximity_warning(result, vehicles, focal_length)
     #################################################################
     #print(f'can_change_lines:{can_change_lines}, switch_direction:{switch_direction}')
     #frame_with_warning
@@ -289,8 +335,7 @@ def detect_vehicles(frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
-
+    cap = cv2.VideoCapture('Driving-night.mp4')
     
     counter=1
     
@@ -308,10 +353,10 @@ if __name__ == "__main__":
 
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
-            if counter%5==0:
-                cv2.imwrite(output_path, processed_frame)
-        else:
-            break
+        #     if counter%5==0:
+        #         cv2.imwrite(output_path, processed_frame)
+        # else:
+        #     break
         
         if cv2.waitKey(25) & 0xFF == ord('q'):
             break
