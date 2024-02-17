@@ -6,23 +6,21 @@ import math
 
 ########### Importing Notice ###########
 prev_lines = np.array([None,None])
-roi_coordinates_focused = (475, 720, 125,900)
+roi_coordinates_focused = (500, 720, 125,900)
 can_change_lines=True
 switch_direction=0
-is_day = False
+is_night = False
 
-def checkIfDay(image):
+def checkIfNight(image):
         # Define the region of interest (ROI) coordinates
     x, y, w, h = 50, 50, 20, 10  # Example coordinates (x, y, width, height)
     # Extract the region of interest from the image
     roi = image[y:y+h, x:x+w]
-    cv2.imshow("asd",roi)
     # Calculate the average RGB values for the ROI
     average_color = np.mean(roi, axis=(0, 1)).astype(int)
-    print(average_color)
     # Define the RGB range
-    rgb_range_lower = np.array([80, 100, 140], dtype=np.uint8)
-    rgb_range_upper = np.array([140, 160, 255], dtype=np.uint8)
+    rgb_range_lower = np.array([0, 0, 0], dtype=np.uint8)
+    rgb_range_upper = np.array([50, 50, 50], dtype=np.uint8)
 
     # Check if the average color is within the specified range
     if np.all(np.logical_and(rgb_range_lower <= average_color, average_color <= rgb_range_upper)):
@@ -63,18 +61,15 @@ def nightLaneColorCalculate():
 
     return lower_custom_night, upper_custom_night
 
-
-
 lower_custom_night, upper_custom_night = nightLaneColorCalculate() ##NOTICE THIS IS NOT A FUNCTION TESTTTTTT
 
 
 def filter_white_yellow_and_gray(image):
 
-
-    gamma = 0.35
-    image = np.power(image/255.0, gamma) * 255.0
-    image = np.uint8(image)
-
+    if is_night:
+        gamma = 0.25    
+        image = np.power(image/255.0, gamma) * 255.0
+        image = np.uint8(image)
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue_range = (108, 122)
@@ -96,15 +91,6 @@ def filter_white_yellow_and_gray(image):
     #yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
     custom_mask = cv2.inRange(hsv_image, lower_custom, upper_custom)
    
-
-
-    #night white mask
-    # if(is_day):
-    #     print("pass")
-    #     final_mask = cv2.bitwise_or(white_mask, custom_mask)
-    # else:
-    #final_mask = cv2.inRange(hsv_image, lower_custom_night, upper_custom_night)
-
     final_mask = cv2.bitwise_or(white_mask, custom_mask)
 
     # Apply the mask to the original image
@@ -125,9 +111,6 @@ def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
 
-
-    
-
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
     temp_clipped_frame[temp_clipped_frame>0]=255
 
@@ -145,7 +128,6 @@ def image_manipulation(image):
     edges = cv2.Canny(edges, 10, 150)
     
     
-    #edges[edges>10]=255
     ################################################################
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
@@ -155,6 +137,8 @@ def image_manipulation(image):
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
+
+    cv2.imshow("help", masked_corner_edges)
     return masked_corner_edges
 
 def average_lines(lines):
@@ -205,9 +189,6 @@ def check_lane_change(lines):
             dirc_val= 1
         return dirc_val
        
-
-
-
 def region(original_frame,type,image=None):
     #focus on region of interest
     if type=="crop":
@@ -218,7 +199,6 @@ def region(original_frame,type,image=None):
         original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
         return original_frame
     
-
 #let's define it for start to 50%
 def drawLines(image,lines,length_lines):
     if lines is None:
@@ -239,8 +219,8 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=30 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=30 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=26 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=26 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
 
 def calculate_real_distance(pixel_size, focal_length):
@@ -249,7 +229,6 @@ def calculate_real_distance(pixel_size, focal_length):
     real_size = 3.0  # Adjust based on the actual size of a vehicle in the scene
     real_distance = focal_length * real_size / pixel_size
     return real_distance
-
 
 def draw_proximity_warning(frame, vehicles, focal_length):
     min_distance = float('inf')  # Initialize with positive infinity
@@ -313,9 +292,9 @@ def lane_notifier(original_frame,side):
 def process_image(original_frame):
     global switch_direction
     global can_change_lines
-    global is_day
+    global is_night
     focal_length = 500.0
-    is_day = checkIfDay(original_frame)
+    is_night = checkIfNight(original_frame)
     ################################################################
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
