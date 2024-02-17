@@ -6,7 +6,7 @@ import math
 
 ########### Importing Notice ###########
 prev_lines = np.array([None,None])
-roi_coordinates_focused = (500, 720, 125,900)
+roi_coordinates_focused = (480, 720, 125,1000)
 can_change_lines=True
 switch_direction=0
 
@@ -16,9 +16,9 @@ switch_direction=0
 def filter_white_yellow_and_gray(image):
 
     
-    # gamma = 0.25    
-    # image = np.power(image/255.0, gamma) * 255.0
-    # image = np.uint8(image)
+    gamma = 0.8    
+    image = np.power(image/255.0, gamma) * 255.0
+    image = np.uint8(image)
 
 
     # Convert the image to the HSV color space
@@ -30,7 +30,7 @@ def filter_white_yellow_and_gray(image):
     upper_custom = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
     # Define the lower and upper bounds for white color in HSV
     lower_white = np.array([0, 0, 180], dtype=np.uint8)
-    upper_white = np.array([255, 100, 255], dtype=np.uint8)
+    upper_white = np.array([255, 30, 255], dtype=np.uint8)
 
    
     # Create masks for white, yellow, and gray regions
@@ -42,16 +42,12 @@ def filter_white_yellow_and_gray(image):
 
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
-    cv2.imshow('before equ',result)
 
-    result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
-    equalized_result = cv2.equalizeHist(result)
-    cv2.imshow('after equ',equalized_result)
-    equalized_result[equalized_result>0] = 255
+    
 
 
 
-    return equalized_result
+    return result
 
 def show_image(img):
 
@@ -65,7 +61,8 @@ def image_manipulation(image):
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
-
+    temp_clipped_frame =cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
+    temp_clipped_frame[temp_clipped_frame>0] = 255
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.dilate(temp_clipped_frame, kernel, iterations=1)
@@ -82,7 +79,7 @@ def image_manipulation(image):
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    vertices = np.array([[(0, int(height)), (int(width*0.55), 0), (int(width*0.82), 0) ,(width,int(height))]], dtype=np.int32)
+    vertices = np.array([[(0, int(height)), (int(width*0.5), 0), (int(width*0.82), 0) ,(width,int(height))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
@@ -169,8 +166,8 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=30 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=30 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=35 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=35 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
 
 def calculate_real_distance(pixel_size, focal_length):
