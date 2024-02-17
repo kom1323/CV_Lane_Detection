@@ -6,17 +6,36 @@ import math
 
 ########### Importing Notice ###########
 prev_lines = np.array([None,None])
-roi_coordinates_focused = (500, 720, 125,900)
+roi_coordinates_focused = (475, 720, 125,900)
 can_change_lines=True
 switch_direction=0
+is_day = False
+
+def checkIfDay(image):
+        # Define the region of interest (ROI) coordinates
+    x, y, w, h = 50, 50, 20, 10  # Example coordinates (x, y, width, height)
+    # Extract the region of interest from the image
+    roi = image[y:y+h, x:x+w]
+    cv2.imshow("asd",roi)
+    # Calculate the average RGB values for the ROI
+    average_color = np.mean(roi, axis=(0, 1)).astype(int)
+    print(average_color)
+    # Define the RGB range
+    rgb_range_lower = np.array([80, 100, 140], dtype=np.uint8)
+    rgb_range_upper = np.array([140, 160, 255], dtype=np.uint8)
+
+    # Check if the average color is within the specified range
+    if np.all(np.logical_and(rgb_range_lower <= average_color, average_color <= rgb_range_upper)):
+        return True
+    return False
 
 def nightLaneColorCalculate():
 
         # RGB values to be included in the HSV range
-    base_rgb_values = (123, 111, 108)
+    base_rgb_values = (220, 220, 220)
 
     # Define the range for each channel (+/- 10)
-    rgb_range = 10
+    rgb_range = 15
 
     # Generate a list of RGB values within the specified range
     rgb_values_list = [
@@ -51,7 +70,10 @@ lower_custom_night, upper_custom_night = nightLaneColorCalculate() ##NOTICE THIS
 
 def filter_white_yellow_and_gray(image):
 
-    global custom_mask_night
+
+    gamma = 0.35
+    image = np.power(image/255.0, gamma) * 255.0
+    image = np.uint8(image)
 
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -74,17 +96,20 @@ def filter_white_yellow_and_gray(image):
     #yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
     custom_mask = cv2.inRange(hsv_image, lower_custom, upper_custom)
    
+
+
     #night white mask
-    
-    custom_mask_night = cv2.inRange(hsv_image, lower_custom_night, upper_custom_night)
+    # if(is_day):
+    #     print("pass")
+    #     final_mask = cv2.bitwise_or(white_mask, custom_mask)
+    # else:
+    #final_mask = cv2.inRange(hsv_image, lower_custom_night, upper_custom_night)
 
-    # Combine the masks to get the final mask
     final_mask = cv2.bitwise_or(white_mask, custom_mask)
-    final_mask = cv2.bitwise_or(final_mask, custom_mask_night)
-
 
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
+    cv2.imshow('manipulated image',result)
 
     return result
 
@@ -96,17 +121,22 @@ def show_image(img):
     plt.show()
 
 def image_manipulation(image):
+
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
 
+
+    
+
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
     temp_clipped_frame[temp_clipped_frame>0]=255
+
     
     edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.dilate(edges, kernel, iterations=1)
-    cv2.imshow('manipulated image',temp_clipped_frame)
+    
 
     kernel_size = 5
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
@@ -120,12 +150,11 @@ def image_manipulation(image):
     #masking corners of roi
     mask_corners = np.zeros_like(edges) #mask for corners
     height, width = mask_corners.shape[:2]
-    vertices = np.array([[(0, int(height)), (int(width*0.5), 0), (int(width*0.65), 0) ,(width,int(height))]], dtype=np.int32)
+    vertices = np.array([[(0, int(height)), (int(width*0.55), 0), (int(width*0.82), 0) ,(width,int(height))]], dtype=np.int32)
 
     # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
-    #cv2.imshow('manipulated image',masked_corner_edges)
     return masked_corner_edges
 
 def average_lines(lines):
@@ -284,11 +313,13 @@ def lane_notifier(original_frame,side):
 def process_image(original_frame):
     global switch_direction
     global can_change_lines
+    global is_day
     focal_length = 500.0
+    is_day = checkIfDay(original_frame)
     ################################################################
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
-
+    
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
@@ -335,14 +366,13 @@ def detect_vehicles(frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-night.mp4')
+    cap = cv2.VideoCapture('Driving-pass.mp4')
     
     counter=1
     
     while(cap.isOpened() ): #and cap2.isOpened()):
         ret, frame = cap.read()
         output_path = f'C:\\temp\\frames\\frame{counter}.jpg'
-
         # Save the frame as an image file
 
        #cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
@@ -350,7 +380,6 @@ if __name__ == "__main__":
 
         counter+=1
         if ret :
-
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
         #     if counter%5==0:
