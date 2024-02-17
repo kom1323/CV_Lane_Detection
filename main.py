@@ -9,67 +9,18 @@ prev_lines = np.array([None,None])
 roi_coordinates_focused = (500, 720, 125,900)
 can_change_lines=True
 switch_direction=0
-is_night = False
 
-def checkIfNight(image):
-        # Define the region of interest (ROI) coordinates
-    x, y, w, h = 50, 50, 20, 10  # Example coordinates (x, y, width, height)
-    # Extract the region of interest from the image
-    roi = image[y:y+h, x:x+w]
-    # Calculate the average RGB values for the ROI
-    average_color = np.mean(roi, axis=(0, 1)).astype(int)
-    # Define the RGB range
-    rgb_range_lower = np.array([0, 0, 0], dtype=np.uint8)
-    rgb_range_upper = np.array([50, 50, 50], dtype=np.uint8)
 
-    # Check if the average color is within the specified range
-    if np.all(np.logical_and(rgb_range_lower <= average_color, average_color <= rgb_range_upper)):
-        return True
-    return False
-
-def nightLaneColorCalculate():
-
-        # RGB values to be included in the HSV range
-    base_rgb_values = (220, 220, 220)
-
-    # Define the range for each channel (+/- 10)
-    rgb_range = 15
-
-    # Generate a list of RGB values within the specified range
-    rgb_values_list = [
-        (
-            np.clip(base_rgb_values[0] + i, 0, 255),
-            np.clip(base_rgb_values[1] + j, 0, 255),
-            np.clip(base_rgb_values[2] + k, 0, 255)
-        )
-        for i in range(-rgb_range, rgb_range + 1)
-        for j in range(-rgb_range, rgb_range + 1)
-        for k in range(-rgb_range, rgb_range + 1)
-    ]
-
-    # Convert the list of RGB values to a list of corresponding HSV values
-    hsv_values_list = [cv2.cvtColor(np.uint8([[rgb]]), cv2.COLOR_RGB2HSV)[0][0] for rgb in rgb_values_list]
-
-    # Calculate the ranges for hue, saturation, and value
-    hue_range = (min(hsv_values_list, key=lambda x: x[0])[0], max(hsv_values_list, key=lambda x: x[0])[0])
-    saturation_range = (15, 85)
-    value_range = (90, 130)
-
-    # Create lower and upper custom HSV arrays
-    lower_custom_night = np.array([hue_range[0], saturation_range[0], value_range[0]], dtype=np.uint8)
-    upper_custom_night = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
-
-    return lower_custom_night, upper_custom_night
-
-lower_custom_night, upper_custom_night = nightLaneColorCalculate() ##NOTICE THIS IS NOT A FUNCTION TESTTTTTT
 
 
 def filter_white_yellow_and_gray(image):
 
-    if is_night:
-        gamma = 0.25    
-        image = np.power(image/255.0, gamma) * 255.0
-        image = np.uint8(image)
+    
+    # gamma = 0.25    
+    # image = np.power(image/255.0, gamma) * 255.0
+    # image = np.uint8(image)
+
+
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     hue_range = (108, 122)
@@ -79,11 +30,7 @@ def filter_white_yellow_and_gray(image):
     upper_custom = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
     # Define the lower and upper bounds for white color in HSV
     lower_white = np.array([0, 0, 180], dtype=np.uint8)
-    upper_white = np.array([255, 30, 255], dtype=np.uint8)
-
-    # Define the lower and upper bounds for yellow color in HSV
-    lower_yellow = np.array([20, 100, 100], dtype=np.uint8)
-    upper_yellow = np.array([40, 255, 255], dtype=np.uint8)
+    upper_white = np.array([255, 100, 255], dtype=np.uint8)
 
    
     # Create masks for white, yellow, and gray regions
@@ -95,9 +42,16 @@ def filter_white_yellow_and_gray(image):
 
     # Apply the mask to the original image
     result = cv2.bitwise_and(image, image, mask=final_mask)
-    cv2.imshow('manipulated image',result)
+    cv2.imshow('before equ',result)
 
-    return result
+    result = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+    equalized_result = cv2.equalizeHist(result)
+    cv2.imshow('after equ',equalized_result)
+    equalized_result[equalized_result>0] = 255
+
+
+
+    return equalized_result
 
 def show_image(img):
 
@@ -110,22 +64,18 @@ def image_manipulation(image):
 
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
-
     temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
-    temp_clipped_frame[temp_clipped_frame>0]=255
 
-    
-    edges = cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
-    edges = cv2.dilate(edges, kernel, iterations=1)
+    edges = cv2.dilate(temp_clipped_frame, kernel, iterations=1)
     
 
     kernel_size = 5
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.erode(edges, kernel, iterations=1)
 
-    edges = cv2.Canny(edges, 10, 150)
+    edges = cv2.Canny(edges, 10, 20)
     
     
     ################################################################
@@ -219,8 +169,8 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=26 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=26 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=30 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=30 ,min_theta=2.2,max_theta=3) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
     return l_lines,r_lines
 
 def calculate_real_distance(pixel_size, focal_length):
@@ -294,7 +244,6 @@ def process_image(original_frame):
     global can_change_lines
     global is_night
     focal_length = 500.0
-    is_night = checkIfNight(original_frame)
     ################################################################
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
