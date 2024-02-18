@@ -20,7 +20,7 @@ def detect_crosswalk(image):
     os.makedirs(subfolder_path, exist_ok=True)
     #output_file_path = os.path.join(subfolder_path, f'subpicture-{num_pictures}.jpg')
 
-    template_file_path = os.path.join(subfolder_path, 'crosswalk_temp.jpg')
+    template_file_path = os.path.join(subfolder_path, 'crosswalk_template.jpg')
     template = cv2.imread(template_file_path)   
         # Convert both images to grayscale
     main_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
