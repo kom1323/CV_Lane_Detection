@@ -12,7 +12,7 @@ switch_direction=0
 num_pictures = 1
 
 
-def save_crosswalk(image):
+def detect_crosswalk(image):
     global num_pictures
 
     import os
@@ -30,7 +30,7 @@ def save_crosswalk(image):
     result = cv2.matchTemplate(main_gray, template_gray, cv2.TM_CCOEFF_NORMED)
 
         # Set a correlation threshold
-    threshold = 0.4  # Adjust the threshold as needed
+    threshold = 0.48  # Adjust the threshold as needed
 
     # Get the location with the highest correlation above the threshold
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
@@ -65,7 +65,7 @@ def enhance_lane_visibility(image):
     alpha = 1.1  # Contrast control (1.0 means no change)
     beta = 1    # Brightness control (0 means no change)
     enhanced = cv2.convertScaleAbs(clahe_output, alpha=alpha, beta=beta)
-
+    enhanced[enhanced<180] = 0
     return enhanced
 
 
@@ -120,7 +120,7 @@ def image_manipulation(image):
     temp_clipped_frame=enhance_lane_visibility(temp_clipped_frame)
     #temp_clipped_frame =cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
     
-    temp_clipped_frame[temp_clipped_frame<180] = 0
+    
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.dilate(temp_clipped_frame, kernel, iterations=1)
@@ -306,7 +306,7 @@ def process_image(original_frame):
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
-    save_crosswalk(cropped_frame)
+    detect_crosswalk(cropped_frame)
     #################################################################
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
@@ -349,7 +349,7 @@ def detect_vehicles(frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
+    cap = cv2.VideoCapture('Driving-crosswalk.mp4')
     
     counter=1
     
