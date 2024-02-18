@@ -6,10 +6,49 @@ import math
 
 ########### Importing Notice ###########
 prev_lines = np.array([None,None])
-roi_coordinates_focused = (480, 720, 125,1000)
+roi_coordinates_focused = (480, 720, 100,1000)
 can_change_lines=True
 switch_direction=0
+num_pictures = 1
 
+
+def save_crosswalk(image):
+    global num_pictures
+
+    import os
+    subfolder_path = 'croswalk'
+    os.makedirs(subfolder_path, exist_ok=True)
+    #output_file_path = os.path.join(subfolder_path, f'subpicture-{num_pictures}.jpg')
+
+    template_file_path = os.path.join(subfolder_path, 'crosswalk_temp.jpg')
+    template = cv2.imread(template_file_path)   
+        # Convert both images to grayscale
+    main_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+
+    # Perform template matching
+    result = cv2.matchTemplate(main_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+
+        # Set a correlation threshold
+    threshold = 0.4  # Adjust the threshold as needed
+
+    # Get the location with the highest correlation above the threshold
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    if max_val >= threshold:
+        # Draw a rectangle around the matched region on the main image
+        h, w = template_gray.shape
+        top_left = max_loc
+        bottom_right = (top_left[0] + w, top_left[1] + h)
+        cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 2)
+
+    cv2.imshow('Matching Result', image)
+    
+    
+    # roi = image[50:160, 200:800]
+    # cv2.imshow("asd",roi)
+    # if num_pictures == 167:
+    #     cv2.imwrite(output_file_path, roi)  # Replace 'subpicture.jpg' with your desired file name and format
+    # num_pictures += 1
 
 def enhance_lane_visibility(image):
     # Convert the image to grayscale
@@ -267,13 +306,13 @@ def process_image(original_frame):
     ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
-
+    save_crosswalk(cropped_frame)
     #################################################################
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
     lines = filter_lines(lines_left,lines_right)
     # Detect vehicles in the frame
-    #vehicles = detect_vehicles(original_frame)
+    #vehicles = detect_vehicles(cropped_frame)
 
     # Draw proximity warning on the frame with real-world distance information
     
@@ -283,7 +322,7 @@ def process_image(original_frame):
     length_lines=1
     cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
     frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
-    #frame_with_warning = draw_proximity_warning(result, vehicles, focal_length)
+    #frame_with_warning = draw_proximity_warning(frame_with_warning, vehicles, focal_length)
     #################################################################
     #print(f'can_change_lines:{can_change_lines}, switch_direction:{switch_direction}')
     #frame_with_warning
@@ -310,24 +349,19 @@ def detect_vehicles(frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('night11.mp4')
+    cap = cv2.VideoCapture('Driving-passAndCollisonDetect.mp4')
     
     counter=1
     
-    while(cap.isOpened() ): #and cap2.isOpened()):
+    while(cap.isOpened() ): 
         ret, frame = cap.read()
-        output_path = f'C:\\temp\\frames\\frame{counter}.jpg'
-        # Save the frame as an image file
 
-       #cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
         print(f"frame {counter}")
 
         counter+=1
         if ret :
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
-        #     if counter%5==0:
-        #         cv2.imwrite(output_path, processed_frame)
         else:
             break
         
