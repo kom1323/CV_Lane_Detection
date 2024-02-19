@@ -4,15 +4,15 @@ import matplotlib.pyplot as plt
 import os
 import math
 
-prev_lines = np.array([None,None])
 roi_coordinates_focused = (480, 720, 100,1000)
 can_change_lines=True
 switch_direction=0
-num_pictures = 1
 
 
 def detect_crosswalk(image):
-    global num_pictures
+
+    """Uses template matchin to detect crosswalks and display a bounding box on the crosswalk"""
+
     subfolder_path = 'croswalk'
     os.makedirs(subfolder_path, exist_ok=True)
     template_file_path = os.path.join(subfolder_path, 'crosswalk_template.jpg')
@@ -31,8 +31,10 @@ def detect_crosswalk(image):
         bottom_right = (top_left[0] + w, top_left[1] + h)
         cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 2)
 
-
 def enhance_lane_visibility(image):
+   
+    """Apply histogram equalizers to the image to get a better detection of the lane lines"""
+   
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
     # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better local contrast
@@ -45,81 +47,27 @@ def enhance_lane_visibility(image):
     enhanced[enhanced<180] = 0
     return enhanced
 
-
-def filter_white_yellow_and_gray(image):
-
-    image=enhance_lane_visibility(image)
-    gamma = 0.9    
-    image = np.power(image/255.0, gamma)
-    image = np.uint8(image)
-
-    # Convert the image to the HSV color space
-    hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hue_range = (108, 122)
-    saturation_range = (15, 85)
-    value_range = (90, 130)
-    lower_custom = np.array([hue_range[0], saturation_range[0], value_range[0]], dtype=np.uint8)
-    upper_custom = np.array([hue_range[1], saturation_range[1], value_range[1]], dtype=np.uint8)
-    # Define the lower and upper bounds for white color in HSV
-    lower_white = np.array([0, 0, 180], dtype=np.uint8)
-    upper_white = np.array([255, 30, 255], dtype=np.uint8)
-
-   
-    # Create masks for white, yellow, and gray regions
-    white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
-    #yellow_mask = cv2.inRange(hsv_image, lower_yellow, upper_yellow)
-    custom_mask = cv2.inRange(hsv_image, lower_custom, upper_custom)
-   
-    final_mask = cv2.bitwise_or(white_mask, custom_mask)
-
-    # Apply the mask to the original image
-    result = cv2.bitwise_and(image, image, mask=final_mask)
-
-    
-
-
-
-    return result
-
-def show_image(img):
-
-    plt.figure(figsize=(10, 10))
-    plt.imshow(img, cmap="gray", vmin=0, vmax=255)
-    plt.colorbar()
-    plt.show()
-
 def image_manipulation(image):
+
+    "Extracts the valuable pixels from the image as white and not valuable as black"
 
     temp_clipped_frame = image.copy()
     temp_clipped_frame = cv2.bilateralFilter(temp_clipped_frame, d=5, sigmaColor=75, sigmaSpace=150)
-    #temp_clipped_frame=filter_white_yellow_and_gray(temp_clipped_frame)
     temp_clipped_frame=enhance_lane_visibility(temp_clipped_frame)
-    #temp_clipped_frame =cv2.cvtColor(temp_clipped_frame, cv2.COLOR_BGR2GRAY)
-    
-    
+        
     kernel_size = 8
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
     edges = cv2.dilate(temp_clipped_frame, kernel, iterations=1)
-    
-
-    # kernel_size = 5
-    # kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (kernel_size, kernel_size))
-    # edges = cv2.erode(edges, kernel, iterations=1)
 
     edges = cv2.Canny(edges, 50, 100)
     
-    
-    ################################################################
-    #masking corners of roi
-    mask_corners = np.zeros_like(edges) #mask for corners
+    #creating a triangle mask for better roi
+    mask_corners = np.zeros_like(edges)
     height, width = mask_corners.shape[:2]
     vertices = np.array([[(0, int(height)), (int(width*0.55), 0), (int(width*0.65), 0) ,(width,int(height))]], dtype=np.int32)
-
-    # Fill the triangles in the mask
     cv2.fillPoly(mask_corners, vertices, 255)
     masked_corner_edges = cv2.bitwise_and(edges, mask_corners)
 
-    cv2.imshow("help", masked_corner_edges)
     return masked_corner_edges
 
 def average_lines(lines):
@@ -131,19 +79,17 @@ def average_lines(lines):
     return None
 
 def filter_lines(lines_left,lines_right):
-    global prev_lines
+
+    """combines left lines into one line and right lines into one line and handles the lane switching states"""
+
     global switch_direction
     global can_change_lines
     left_line=None
     right_line=None
     change_lanes=0
-    count_left=0
-    count_right=0
-
     filtered_lines = [None,None]
 
-
-
+    #avg lines for each side
     if lines_left is not None:
         left_line = average_lines(lines_left)
         filtered_lines[0]=left_line 
@@ -151,7 +97,7 @@ def filter_lines(lines_left,lines_right):
         right_line = average_lines(lines_right)
         filtered_lines[1]=right_line
     
-#  
+    #changing lanes logic
     change_lanes= check_lane_change(filtered_lines)
     if left_line is not None and right_line is not None:
         can_change_lines=True
@@ -177,11 +123,11 @@ def region(original_frame,type,image=None):
         clipped_frame = roi.copy()
         return clipped_frame
     else:
+        #paste the roi back into the original frame
         original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
         return original_frame
     
-#let's define it for start to 50%
-def drawLines(image,lines,length_lines):
+def drawLines(image,lines):
     if lines is None:
         return image
     for line in lines:
@@ -200,8 +146,11 @@ def drawLines(image,lines,length_lines):
     return image
 
 def collectLines(image):
-    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=37 ,min_theta=0.1,max_theta=1.07)##min_theta =math.pi/4, max_theta = math.pi/3.5)#return to -math.pi/2
-    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=37 ,min_theta=2.2,max_theta=2.9) ##=-math.pi/4, max_theta = -math.pi/4.5)#return to -math.pi/2        
+
+    """Uses cv2.houghlines to collect all lines of the left and right lanes sperately"""
+    
+    l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=37 ,min_theta=0.1,max_theta=1.07)
+    r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=37 ,min_theta=2.2,max_theta=2.9)        
     return l_lines,r_lines
 
 def calculate_real_distance(pixel_size, focal_length):
@@ -296,7 +245,7 @@ def process_image(original_frame):
     #################################################################
     #creating result
     length_lines=1
-    cropped_image_with_lines = drawLines(cropped_frame,lines,length_lines)
+    cropped_image_with_lines = drawLines(cropped_frame,lines)
     frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
     #frame_with_warning = draw_proximity_warning(frame_with_warning, vehicles, focal_length)
     #################################################################
