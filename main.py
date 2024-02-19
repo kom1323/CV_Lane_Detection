@@ -7,12 +7,14 @@ import math
 roi_coordinates_focused = (480, 720, 100,1000)
 can_change_lines=True
 switch_direction=0
+crosswalk_detected = False
 
 
 def detect_crosswalk(image):
 
     """Uses template matchin to detect crosswalks and display a bounding box on the crosswalk"""
 
+    global crosswalk_detected
     subfolder_path = 'croswalk'
     os.makedirs(subfolder_path, exist_ok=True)
     template_file_path = os.path.join(subfolder_path, 'crosswalk_template.jpg')
@@ -26,10 +28,13 @@ def detect_crosswalk(image):
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
     if max_val >= threshold:
         #draw rectangle around the template
+        crosswalk_detected = True
         h, w = template_gray.shape
         top_left = max_loc
         bottom_right = (top_left[0] + w, top_left[1] + h)
         cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 2)
+    else:
+        crosswalk_detected = False
 
 def enhance_lane_visibility(image):
    
@@ -124,7 +129,9 @@ def region(original_frame,type,image=None):
         return clipped_frame
     else:
         #paste the roi back into the original frame
-        original_frame[roi_coordinates_focused[0]: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
+        y_offset = 30
+        image = image[y_offset:,:]
+        original_frame[roi_coordinates_focused[0] + y_offset: roi_coordinates_focused[1], roi_coordinates_focused[2]:roi_coordinates_focused[3]] = image
         return original_frame
     
 def drawLines(image,lines):
@@ -182,6 +189,7 @@ def process_image(original_frame):
     
     global switch_direction
     global can_change_lines
+    global crosswalk_detected
 
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
@@ -192,13 +200,16 @@ def process_image(original_frame):
     #finding crosswalks and displaying bounding box
     detect_crosswalk(cropped_frame)
 
-    #extracting lines
-    lines_left, lines_right = collectLines(manipulated_image)
-    lines = filter_lines(lines_left,lines_right)
     
-    #creating result
-    cropped_image_with_lines = drawLines(cropped_frame,lines)
-    frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
+    if not crosswalk_detected:
+        #extracting lines
+        lines_left, lines_right = collectLines(manipulated_image)
+        lines = filter_lines(lines_left,lines_right)
+        #creating result
+        cropped_image_with_lines = drawLines(cropped_frame,lines)
+        frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
+    else:
+        frame_with_warning = region(original_frame,"paste",cropped_frame)
 
     #check and implement lane_notifier
     if can_change_lines==False:
