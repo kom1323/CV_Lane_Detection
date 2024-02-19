@@ -209,7 +209,7 @@ def process_image(original_frame):
     return frame_with_warning
 
 if __name__ == "__main__":
-    cap = cv2.VideoCapture('Driving-passDay.mp4')
+    cap = cv2.VideoCapture('Driving-crosswalk.mp4')
     
     while(cap.isOpened() ): 
         ret, frame = cap.read()
