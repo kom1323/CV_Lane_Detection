@@ -15,7 +15,7 @@ def detect_crosswalk(image):
     """Uses template matchin to detect crosswalks and display a bounding box on the crosswalk"""
 
     global crosswalk_detected
-    subfolder_path = 'croswalk'
+    subfolder_path = 'crosswalk'
     os.makedirs(subfolder_path, exist_ok=True)
     template_file_path = os.path.join(subfolder_path, 'crosswalk_template.jpg')
     template = cv2.imread(template_file_path)   
