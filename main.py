@@ -148,68 +148,24 @@ def drawLines(image,lines):
 def collectLines(image):
 
     """Uses cv2.houghlines to collect all lines of the left and right lanes sperately"""
-    
+
     l_lines =cv2.HoughLines(image, rho=1,theta=np.pi / 180, threshold=37 ,min_theta=0.1,max_theta=1.07)
     r_lines = cv2.HoughLines(image, rho=1, theta=np.pi / 180, threshold=37 ,min_theta=2.2,max_theta=2.9)        
     return l_lines,r_lines
 
-def calculate_real_distance(pixel_size, focal_length):
-    # Assuming a simple linear relationship between pixel size and real-world distance
-    # You may need a more sophisticated calibration for accurate results
-    real_size = 3.0  # Adjust based on the actual size of a vehicle in the scene
-    real_distance = focal_length * real_size / pixel_size
-    return real_distance
-
-def draw_proximity_warning(frame, vehicles, focal_length):
-    min_distance = float('inf')  # Initialize with positive infinity
-    warning_color = (0, 0, 255)  # Default color for the warning text
-
-    for (x, y, w, h) in vehicles:
-        # Draw bounding boxes around detected vehicles
-        pixel_size = (w + h) / 2 
-        
-
-        # Calculate pixel size (average of width and height)
-
-        # Calculate real-world distance
-        real_distance = calculate_real_distance(pixel_size, focal_length)
-        if real_distance > 50:
-            continue
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-        # Update minimum distance if the current distance is smaller
-        min_distance = min(min_distance, real_distance)
-
-        # Add real-world distance to the bounding box
-        text = f"{real_distance:.2f} meters"
-        cv2.putText(frame, text, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
-
-    # Check if close cars are found before adding the warning text
-    if min_distance < 50.0:  # Adjust the threshold as needed
-        # Update warning text color based on the minimum distance
-        if min_distance < 20.0:
-            warning_color = (255, 0, 0)  # Change color to green if minimum distance is less than 2.0 meters
-        elif min_distance < 30.0:
-            warning_color = (0, 255, 0)  # Change color to yellow if minimum distance is less than 5.0 meters
-        else:
-            warning_color = (0, 0, 255)
-
-        # Add a warning message with the updated color
-        warning_text = f"Proximity Warning: Vehicles Nearby! Min Distance: {min_distance:.2f} meters"
-        cv2.putText(frame, warning_text, (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, warning_color, 2, cv2.LINE_AA)
-
-    return frame
-
 def lane_notifier(original_frame,side):
-    text = f"Taking Lane {side}"
+
+    """displays on frame the side the car is switching lanes to"""
+
+    text = f"Taking {side} lane"
     font = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = 2
     font_thickness = 2
     font_color = (0, 255, 0)  # White color in BGR format
-    background_color = (original_frame.shape[0]*0.5, 0, 0)  # Black color in BGR format
 
     # Get text size to determine the position
     text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
-    text_position = ((original_frame.shape[1] - text_size[0]) // 4, 200)  # Adjust the Y-coordinate as needed
+    text_position = ((original_frame.shape[1] - text_size[0]) // 4, 200)
 
     # Create a black background for the text
     text_background = np.zeros_like(original_frame)
@@ -219,38 +175,32 @@ def lane_notifier(original_frame,side):
     alpha = 0.7  # Adjust the transparency of the text background
     result = cv2.addWeighted(original_frame, 1, text_background, alpha, 0)
     return result
+
 def process_image(original_frame):
+    
+    """Finds lane lines and crosswalks, displays them and returns the frame"""
+    
     global switch_direction
     global can_change_lines
-    global is_night
-    focal_length = 500.0
-    ################################################################
+
     #focusing on region of interest   
     cropped_frame= region(original_frame,"crop")
     
-    ################################################################
     #image manipulation
     manipulated_image = image_manipulation(cropped_frame)
+
+    #finding crosswalks and displaying bounding box
     detect_crosswalk(cropped_frame)
-    #################################################################
+
     #extracting lines
     lines_left, lines_right = collectLines(manipulated_image)
     lines = filter_lines(lines_left,lines_right)
-    # Detect vehicles in the frame
-    #vehicles = detect_vehicles(cropped_frame)
-
-    # Draw proximity warning on the frame with real-world distance information
     
-
-    #################################################################
     #creating result
-    length_lines=1
     cropped_image_with_lines = drawLines(cropped_frame,lines)
     frame_with_warning = region(original_frame,"paste",cropped_image_with_lines)
-    #frame_with_warning = draw_proximity_warning(frame_with_warning, vehicles, focal_length)
-    #################################################################
-    #print(f'can_change_lines:{can_change_lines}, switch_direction:{switch_direction}')
-    #frame_with_warning
+
+    #check and implement lane_notifier
     if can_change_lines==False:
         if switch_direction==-1:
             return lane_notifier(frame_with_warning,"left")
@@ -258,32 +208,11 @@ def process_image(original_frame):
             return lane_notifier(frame_with_warning,"right")
     return frame_with_warning
 
-def detect_vehicles(frame):
-    # Load the pre-trained vehicle detection Haarcascades classifier
-    cascade_src = 'cars.xml'
-
-    car_cascade = cv2.CascadeClassifier(cascade_src)
-    # Convert the frame to grayscale for Haarcascades
-    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Detect vehicles in the frame
-    vehicles = car_cascade.detectMultiScale(gray_frame, scaleFactor=1.05, minNeighbors=6)#,minSize=)
-    print(vehicles)
-
-    return vehicles
-
 if __name__ == "__main__":
-
-    cap = cv2.VideoCapture('Driving-night.mp4')
-    
-    counter=1
+    cap = cv2.VideoCapture('Driving-passDay.mp4')
     
     while(cap.isOpened() ): 
         ret, frame = cap.read()
-
-        print(f"frame {counter}")
-
-        counter+=1
         if ret :
             processed_frame = process_image(frame)
             cv2.imshow('Lane Detection',processed_frame)
