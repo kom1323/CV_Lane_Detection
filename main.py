@@ -1,10 +1,9 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 import math
 
-########### Importing Notice ###########
 prev_lines = np.array([None,None])
 roi_coordinates_focused = (480, 720, 100,1000)
 can_change_lines=True
@@ -14,56 +13,34 @@ num_pictures = 1
 
 def detect_crosswalk(image):
     global num_pictures
-
-    import os
     subfolder_path = 'croswalk'
     os.makedirs(subfolder_path, exist_ok=True)
-    #output_file_path = os.path.join(subfolder_path, f'subpicture-{num_pictures}.jpg')
-
     template_file_path = os.path.join(subfolder_path, 'crosswalk_template.jpg')
     template = cv2.imread(template_file_path)   
-        # Convert both images to grayscale
     main_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
-    # Perform template matching
     result = cv2.matchTemplate(main_gray, template_gray, cv2.TM_CCOEFF_NORMED)
 
-        # Set a correlation threshold
-    threshold = 0.48  # Adjust the threshold as needed
-
-    # Get the location with the highest correlation above the threshold
+    threshold = 0.48
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
     if max_val >= threshold:
-        # Draw a rectangle around the matched region on the main image
+        #draw rectangle around the template
         h, w = template_gray.shape
         top_left = max_loc
         bottom_right = (top_left[0] + w, top_left[1] + h)
         cv2.rectangle(image, top_left, bottom_right, (0, 255, 0), 2)
 
-    cv2.imshow('Matching Result', image)
-    
-    
-    # roi = image[50:160, 200:800]
-    # cv2.imshow("asd",roi)
-    # if num_pictures == 167:
-    #     cv2.imwrite(output_file_path, roi)  # Replace 'subpicture.jpg' with your desired file name and format
-    # num_pictures += 1
 
 def enhance_lane_visibility(image):
-    # Convert the image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    # Apply histogram equalization to improve contrast
-    #equalized = cv2.equalizeHist(gray)
 
     # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) for better local contrast
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     clahe_output = clahe.apply(gray)
 
-    # Adjust brightness and contrast
-    alpha = 1.1  # Contrast control (1.0 means no change)
-    beta = 1    # Brightness control (0 means no change)
+    alpha = 1.1  # Contrast control 
+    beta = 1    # Brightness control 
     enhanced = cv2.convertScaleAbs(clahe_output, alpha=alpha, beta=beta)
     enhanced[enhanced<180] = 0
     return enhanced
@@ -75,7 +52,6 @@ def filter_white_yellow_and_gray(image):
     gamma = 0.9    
     image = np.power(image/255.0, gamma)
     image = np.uint8(image)
-
 
     # Convert the image to the HSV color space
     hsv_image = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -349,7 +325,7 @@ def detect_vehicles(frame):
 
 if __name__ == "__main__":
 
-    cap = cv2.VideoCapture('Driving-crosswalk.mp4')
+    cap = cv2.VideoCapture('Driving-night.mp4')
     
     counter=1
     
