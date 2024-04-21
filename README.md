@@ -4,15 +4,16 @@ dashboard video and display them while also showing whether the driver is passin
 
 # Example Videos
 
+https://github.com/kom1323/CV_Lane_Detection/assets/28003020/30da8501-6c78-4cd7-bd66-b04e533afe65
 
-https://github.com/kom1323/CV_Lane_Detection/assets/28003020/0d6ce332-0fad-4544-9733-b92d651c39d4
+https://github.com/kom1323/CV_Lane_Detection/assets/28003020/21e1b866-86d9-4a97-9c29-12455c5e586e
+
+https://github.com/kom1323/CV_Lane_Detection/assets/28003020/ed00314b-284e-48b6-af7b-707885832f62
 
 
-https://github.com/kom1323/CV_Lane_Detection/assets/28003020/2fa27587-34a5-48b0-b4e5-4e19baee452d
 
 
 
-https://github.com/kom1323/CV_Lane_Detection/assets/28003020/2bd6c0cc-e5cc-4ff6-b28c-dfbca2f6fcbd
 
 
 
