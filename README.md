@@ -3,7 +3,10 @@ This repository contains a lane detection app that uses classical computervision
 dashboard video and display them while also showing whether the driver is passing lanes. The app can also identify crosswalks and draws a bounding box around them.
 
 # Example Videos
-https://github.com/kom1323/CV_Lane_Detection/assets/28003020/17b2873e-cf08-4a21-85c6-f23964dfda61
+<p align="Left">
+  <img src="Driving-passDay-output.mp4" alt="Video">
+</p>
+
 
 https://github.com/kom1323/CV_Lane_Detection/assets/28003020/1d19f5a9-da39-4979-9240-92ca39eed785
 
