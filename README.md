@@ -20,7 +20,11 @@ https://github.com/kom1323/CV_Lane_Detection/assets/28003020/57fc453a-6b57-4f7e-
 
 # ComputerVision Techniques 
 Houghlines
+
 Histogram equalizers - CLAHE
+
 Template matching
+
 BilateralFilter
+
 Canny edge detection
