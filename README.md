@@ -9,7 +9,7 @@ https://github.com/kom1323/CV_Lane_Detection/assets/28003020/1d19f5a9-da39-4979-
 
 https://github.com/kom1323/CV_Lane_Detection/assets/28003020/57fc453a-6b57-4f7e-afc6-8052462a6d81
 
-#Try It Yourself
+# Try It Yourself
 
 1. Clone this repo
 2. Setup a Python virtual environment with all the Python dependencies based on [requirements.txt](requirements.txt).
