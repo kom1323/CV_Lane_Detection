@@ -1,5 +1,5 @@
 # CV_Lane_Detection
-This repository contains a lane detection app that uses classical computervision techniques in order to find road lanes from a given
+This repository contains a lane detection app that uses classical computer vision techniques in order to find road lanes from a given
 dashboard video and display them while also showing whether the driver is passing lanes. The app can also identify crosswalks and draws a bounding box around them.
 
 # Example Videos
